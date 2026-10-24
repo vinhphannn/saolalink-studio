@@ -28,7 +28,10 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
         assert 'Refresh' in app.flash_tab.devices.get()
         if os.environ.get('GUI_SMOKE_SCREENSHOT'):
             from PIL import ImageGrab
-            app.update()
+            # CustomTkinter schedules sizing/drawing callbacks after mapping.
+            for _ in range(20):
+                app.update()
+                time.sleep(0.025)
             ImageGrab.grab().save(os.environ['GUI_SMOKE_SCREENSHOT'])
         app.setup_tab.guide()
         app.update()
