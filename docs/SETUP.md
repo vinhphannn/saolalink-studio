@@ -14,7 +14,8 @@ using the serial monitor. Settings are not shared through Git; install the tools
 ## Install and start Studio
 
 Use Python 3.10 or newer. Installing Studio's GUI dependencies is necessary before launching Setup.
-Studio does not install system tools, USB drivers or Python packages automatically.
+After Studio starts, **Setup → Install missing…** can install supported missing build tools and
+Python packages with a review step. Checking setup or pressing Build never installs anything.
 
 Linux, from your Studio checkout:
 
@@ -76,9 +77,48 @@ Use Detect tools to populate tools found on PATH, then review the form. It does 
 Check setup checks the form values. Save & apply activates and persists them. Changing configuration
 is blocked during an operation or an active serial connection. Disconnect and wait for tasks first.
 
+## Install missing components from the GUI
+
+1. Choose your EdgeTX checkout and paths in Setup.
+2. Click **Install missing…**. Studio checks the form and opens a list of proposed installations
+   and remaining issues. You can close the list without changing anything.
+3. Click **Install & recheck** to run the listed installers. Complete the operating system's
+   administrator authentication or publisher installer dialog if one opens. Progress and errors
+   appear in Setup. Studio never asks for or stores administrator passwords.
+4. Review the recheck and updated paths, then **Save & apply**. If a newly discovered dependency
+   is still missing, use Install missing again to review the next repair.
+
+Supported system repairs:
+
+- Fedora: CMake, Git, Ninja/Make, host GCC/G++, dfu-util and `clang-devel` (native libclang and headers).
+  Uses only the official `fedora` and `updates` repositories for this transaction, with signature
+  checking enabled; it does not change saved repository configuration.
+- Ubuntu/Debian: the equivalent packages through the configured APT repositories. Package indexes
+  must already be usable. Linux installation requires `pkexec` and a working desktop Polkit agent.
+  If authentication is cancelled or unavailable, Setup reports that and stops.
+- Windows: CMake, Git, Ninja and LLVM through installed WinGet, with exact package IDs and the
+  publisher's interactive installers. The review states that Install accepts the WinGet source
+  and package agreements. Restart Studio if Windows has not exposed new tools on PATH yet.
+- Missing EdgeTX Python modules: install the selected checkout into the chosen build virtual
+  environment. If Build Python is a system Python, Studio creates a private virtual environment
+  under its per-user cache folder instead of modifying system Python. On Debian/Ubuntu this may
+  require the distribution's matching Python venv package first.
+
+An install can fail due to network, repository or version issues. The actual recheck determines
+readiness; an installer exiting successfully does not guarantee the whole build environment works.
+Keep Studio open during installation. Stop task applies to builds, not package transactions.
+
+Some setup still needs a selection or a vendor installer: the Arm compiler must be **14.2.rel1**,
+the EdgeTX checkout/submodules must exist, and USB drivers/permissions need the correct interface.
+These appear as remaining issues in the review; Studio does not replace USB drivers or install a
+different Arm release. Download Arm GNU from
+https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads and Browse to its root/bin.
+Other Linux distributions, Windows without WinGet, and custom toolchains retain manual path setup.
+
 ## Install EdgeTX Python build packages
 
-Run pip using the SAME Python selected as Build Python. Substitute your actual paths:
+Prefer **Install missing…** to avoid terminal commands. For manual installation, run pip using the
+SAME Python selected as Build Python. Substitute your actual paths:
 
 Linux example:
 

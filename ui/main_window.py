@@ -40,7 +40,8 @@ class AppWindow(ctk.CTk):
         self.profile_picker.set(PROFILES['saolalink-devebox'].name)
         self.mode_picker = ctk.CTkOptionMenu(header, values=['Debug', 'Release'], width=100, command=lambda _: self.update_artifact())
         self.mode_picker.pack(side='left')
-        ctk.CTkButton(header, text='Stop task', width=100, fg_color='#943c3c', command=lambda: self.builder.runner.stop()).pack(side='right', padx=12)
+        self.stop_button = ctk.CTkButton(header, text='Stop task', width=100, fg_color='#943c3c', command=lambda: self.builder.runner.stop())
+        self.stop_button.pack(side='right', padx=12)
         ctk.CTkButton(header, text='Setup', width=75, command=self.open_setup).pack(side='right')
         self.source_label = ctk.CTkLabel(self, text=f'Source: {self.config_data.source}', anchor='w')
         self.source_label.pack(fill='x', padx=24)
@@ -165,6 +166,11 @@ class AppWindow(ctk.CTk):
                         self.append(('[ERROR] ' if kind == 'error' else '') + value + ('\n' if kind == 'error' else ''))
                         if kind == 'error':
                             self.setup_tab.notice.configure(text='Task failed. Review paths and run Check setup. Details are in the operation log.')
+                            if value.startswith('Build setup needs attention:'):
+                                self.open_setup()
+                                self.setup_tab.notice.configure(text='Build setup needs attention. Click Install missing… to review available repairs.')
+                            if self.tabs.get() == 'Setup':
+                                self.setup_tab.install_log('[ERROR] ' + value + '\n')
                     elif kind == 'started':
                         self.status.configure(text='Running • Log: ' + value)
                     elif kind == 'finished':
@@ -182,16 +188,26 @@ class AppWindow(ctk.CTk):
                     elif kind == 'setup_checks':
                         self.setup_tab.show_checks(value)
                         self.append('\n'.join(map(str, value)) + '\n')
+                    elif kind == 'setup_repair_plan':
+                        self.setup_tab.show_repair_plan(value)
+                    elif kind == 'setup_install_log':
+                        self.setup_tab.install_log(value)
+                        self.append(value)
+                    elif kind == 'setup_repair_result':
+                        self.setup_tab.show_repair_result(value)
             except queue.Empty:
                 pass
         self.profile_picker.configure(state='disabled' if self.builder.runner.running or self._checking else 'normal')
         self.mode_picker.configure(state='disabled' if self.builder.runner.running or self._checking else 'normal')
         self.setup_tab.set_busy(self.builder.runner.running or self._checking)
+        stop_state = 'normal' if self.builder.runner.running else 'disabled'
+        if self.stop_button.cget('state') != stop_state:
+            self.stop_button.configure(state=stop_state)
         self.after(50, self.poll)
 
     def close(self):
         if self._checking:
-            self.append('[BUSY] Wait for setup/preflight checks to finish before closing.\n')
+            self.status.configure(text='Wait for setup checks / installation to finish before closing.')
             return
         if self.builder.runner.running:
             if not messagebox.askyesno('Stop operation', 'Stop the current operation and close Studio?'):

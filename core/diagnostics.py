@@ -47,7 +47,7 @@ def diagnose(config, groups=('build', 'flash', 'serial'), scan=False, env=None):
             add(group, name, 'ok', message)
             return output
         except (OSError, ValueError, subprocess.SubprocessError) as error:
-            add(group, name, 'error', f'{error}. Review this tool in Setup.')
+            add(group, name, 'error', f'{error}. Use Setup > Install missing or review this tool path.')
             return None
 
     def tool(name):
@@ -169,4 +169,4 @@ def diagnose(config, groups=('build', 'flash', 'serial'), scan=False, env=None):
 def require_build(config, env=None):
     errors = [str(check) for check in diagnose(config, groups=('build',), env=env) if check.status == 'error']
     if errors:
-        raise ValueError('Build setup needs attention:\n' + '\n'.join(errors) + '\nOpen Setup to select or repair the paths.')
+        raise ValueError('Build setup needs attention:\n' + '\n'.join(errors) + '\nOpen Setup > Install missing to review repairs, or select the correct paths.')

@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import time
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -48,6 +49,27 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
         except ValueError:
             pass
         app._checking = False
+        # Exercise review -> explicit install -> recheck without installing any packages.
+        from core.diagnostics import Check
+        from core.setup_repair import InstallStep, RepairPlan
+        checks = [Check('build', 'Demo dependency', 'error', 'Smoke test only')]
+        plan = RepairPlan(config, tuple(checks), (InstallStep('Safe installer probe',
+            (sys.executable, '-c', 'print("installer output reached Setup")')),), ())
+        with patch('ui.setup_tab.diagnose', return_value=checks), patch('ui.setup_tab.make_plan', return_value=plan):
+            app.setup_tab.repair()
+            deadline = time.monotonic() + 10
+            while app._checking and time.monotonic() < deadline:
+                app.update(); time.sleep(0.01)
+        assert app.setup_tab.repair_window.winfo_exists(), 'Installation must require a review'
+        assert 'installer output reached Setup' not in app.setup_tab.results.get('1.0', 'end')
+        with patch('ui.setup_tab.diagnose', return_value=[Check('build', 'Demo dependency', 'ok', 'ready')]):
+            app.setup_tab.start_repair(plan, app.setup_tab.repair_window)
+            deadline = time.monotonic() + 10
+            while app._checking and time.monotonic() < deadline:
+                app.update(); time.sleep(0.01)
+        assert not app._checking
+        assert 'installer output reached Setup' in app.setup_tab.results.get('1.0', 'end')
+        assert '[OK] build / Demo dependency' in app.setup_tab.results.get('1.0', 'end')
         app.setup_tab.check()
         deadline = time.monotonic() + 90
         while app._checking and time.monotonic() < deadline:
@@ -55,7 +77,7 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
             time.sleep(0.01)
         assert not app._checking, 'Setup diagnostics did not finish'
         assert '[OK]' in app.setup_tab.results.get('1.0', 'end') or '[ERROR]' in app.setup_tab.results.get('1.0', 'end')
-        print('GUI first-run, apply, guide, busy guard and diagnostics: OK')
+        print('GUI first-run, apply, guide, busy guard, install review, output and recheck: OK')
     finally:
         app._checking = False
         app.close()

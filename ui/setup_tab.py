@@ -6,6 +6,7 @@ import customtkinter as ctk
 
 from core.config import AppConfig, settings_path
 from core.diagnostics import diagnose
+from core.setup_repair import make_plan, install
 
 FIELDS = (
     ('source', 'EdgeTX checkout', 'directory'),
@@ -33,6 +34,7 @@ class SetupTab(ctk.CTkFrame):
         self.entries = {}
         self.buttons = []
         self._busy = None
+        self.repair_window = None
         ctk.CTkLabel(self, text='Machine setup', font=ctk.CTkFont(size=24, weight='bold')).pack(anchor='w', pady=(8, 0))
         self.notice = ctk.CTkLabel(self, text='Select paths for this computer. Save & apply, then check setup.', anchor='w')
         self.notice.pack(fill='x')
@@ -62,7 +64,8 @@ class SetupTab(ctk.CTkFrame):
         bar = ctk.CTkFrame(self, fg_color='transparent')
         bar.pack(fill='x', pady=4)
         for label, callback in [('Detect tools', self.detect), ('Save & apply', self.save),
-                                ('Check setup', self.check), ('Setup guide', self.guide), ('Export checks', self.export)]:
+                                ('Check setup', self.check), ('Install missing…', self.repair),
+                                ('Setup guide', self.guide), ('Export checks', self.export)]:
             button = ctk.CTkButton(bar, text=label, width=125, command=callback)
             button.pack(side='left', padx=(0, 6))
             self.buttons.append(button)
@@ -122,6 +125,61 @@ class SetupTab(ctk.CTkFrame):
         self.results.delete('1.0', 'end'); self.results.insert('end', text)
         errors = sum(check.status == 'error' for check in checks)
         self.notice.configure(text=f'Check complete: {errors} error(s). Checks use the form values; Save & apply activates changes.')
+
+    def repair(self):
+        try:
+            config = self.candidate()
+        except Exception as error:
+            self.notice.configure(text=str(error)); return
+        self.notice.configure(text='Checking what can be installed. You can review the list before installing…')
+        def prepare():
+            checks = diagnose(config)
+            self.app.events.put(('setup_repair_plan', make_plan(config, checks)))
+        self.app.background(prepare)
+
+    def show_repair_plan(self, plan):
+        self.show_checks(plan.checks)
+        if self.repair_window and self.repair_window.winfo_exists():
+            self.repair_window.destroy()
+        window = self.repair_window = ctk.CTkToplevel(self)
+        window.title('Install missing components'); window.geometry('780x560')
+        window.transient(self.winfo_toplevel())
+        ctk.CTkLabel(window, text='Review installation', font=ctk.CTkFont(size=20, weight='bold')).pack(anchor='w', padx=18, pady=12)
+        text = ctk.CTkTextbox(window, wrap='word')
+        text.pack(fill='both', expand=True, padx=18, pady=6)
+        text.insert('end', plan.summary()); text.configure(state='disabled')
+        bar = ctk.CTkFrame(window, fg_color='transparent'); bar.pack(fill='x', padx=18, pady=14)
+        ctk.CTkButton(bar, text='Close', command=window.destroy).pack(side='right', padx=6)
+        if plan.steps:
+            ctk.CTkButton(bar, text='Install & recheck', command=lambda: self.start_repair(plan, window)).pack(side='right', padx=6)
+        ctk.CTkButton(bar, text='Setup guide', command=self.guide).pack(side='left')
+        # Delay the grab until mapping; works on Windows and X11.
+        window.after(100, lambda: window.grab_set() if window.winfo_exists() else None)
+
+    def start_repair(self, plan, window):
+        if self.app._checking or self.app.builder.runner.running:
+            return
+        window.destroy()
+        self.results.delete('1.0', 'end')
+        self.notice.configure(text='Installing… Complete any operating-system authentication/installer dialog. Keep Studio open.')
+        def work():
+            log = lambda line: self.app.events.put(('setup_install_log', line))
+            config, failures = install(plan, log)
+            log('\nRechecking setup…\n')
+            checks = diagnose(config, scan=True)
+            self.app.events.put(('setup_repair_result', (config, checks, failures)))
+        self.app.background(work)
+
+    def install_log(self, line):
+        self.results.insert('end', line); self.results.see('end')
+
+    def show_repair_result(self, result):
+        config, checks, failures = result
+        self.fill(config)
+        self.install_log('\n' + '\n\n'.join(map(str, checks)) + '\n')
+        errors = sum(check.status == 'error' for check in checks)
+        self.notice.configure(text=(f'Installation stopped: {failures[0]}' if failures else
+            f'Installation finished; recheck: {errors} error(s).') + ' Review the form, then Save & apply.')
 
     def set_busy(self, busy):
         if busy == self._busy:

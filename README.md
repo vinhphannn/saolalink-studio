@@ -153,12 +153,19 @@ build Python and dfu-util. Studio and EdgeTX do not need to be siblings.
 Optional LLVM, library prefixes, dependency cache and Visual Studio environment
 paths are also available. Use **Save & apply**, then **Check setup**.
 
+Use **Install missing… → Install & recheck** to review and install supported missing
+tools and EdgeTX Python packages from the GUI. Linux uses the desktop authentication
+dialog; Windows uses WinGet and publisher installers. Progress appears in Setup.
+Review the resulting paths and **Save & apply**. Arm GNU 14.2.rel1 and USB driver
+selection still require the correct vendor installation/interface; remaining issues
+are listed explicitly. Checks and builds never start installers automatically.
+
 Settings live in your user profile, outside Git; each team member configures
 their own machine. Build, flash and serial diagnostics are separate. Serial
 scanning never opens a port or automatically connects. Failed setup checks
 include the tool and a repair hint; **Export checks** saves a shareable report.
 
-See [the setup guide](docs/SETUP.md) for Windows and Linux installation commands,
+See [the setup guide](docs/SETUP.md) for supported automatic repairs, manual installation,
 USB/COM drivers, Python dependencies, path overrides and CLI setup.
 
 ```sh
