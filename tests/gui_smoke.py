@@ -21,12 +21,26 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
         app.update()
         assert app.tabs.get() == 'Setup', 'First run must open Setup'
         assert not app.log.winfo_manager(), 'Setup should have room for its form'
+        assert not app.setup_tab.entries['cmake'].winfo_manager(), 'Tool paths should be hidden in basic setup'
+        app.setup_tab.advanced.select(); app.setup_tab.toggle_advanced()
+        app.update()
+        assert app.setup_tab.entries['cmake'].winfo_manager() == 'grid'
+        app.setup_tab.advanced.deselect(); app.setup_tab.toggle_advanced()
         config = app.config_data.updated({'builds': str(Path(temporary) / 'Output with spaces'), 'serial_port': 'COM12'})
         app.apply_setup(config)
         assert AppConfig.load().builds == config.builds
         assert app.builder.config == config
         assert app.serial_tab.preferred_port == 'COM12'
         assert 'Refresh' in app.flash_tab.devices.get()
+        app.setup_tab.fill(config)
+        with patch('ui.setup_tab.discover_tools', return_value=config), \
+                patch('ui.setup_tab.diagnose', return_value=[]):
+            app.setup_tab.detect()
+            deadline = time.monotonic() + 10
+            while app._checking and time.monotonic() < deadline:
+                app.update(); time.sleep(0.01)
+        assert 'NEXT STEPS' in app.setup_tab.results.get('1.0', 'end')
+        assert app.setup_tab.candidate().source == config.source
         if os.environ.get('GUI_SMOKE_SCREENSHOT'):
             from PIL import ImageGrab
             # CustomTkinter schedules sizing/drawing callbacks after mapping.
@@ -38,6 +52,9 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
             ImageGrab.grab().save(os.environ['GUI_SMOKE_SCREENSHOT'])
         app.setup_tab.guide()
         app.update()
+        with patch('ui.setup_tab.webbrowser.open', return_value=True) as browser:
+            app.setup_tab.open_link('https://www.python.org/downloads/windows/')
+            browser.assert_called_once()
         for child in app.winfo_children():
             if isinstance(child, ctk.CTkToplevel):
                 child.destroy()

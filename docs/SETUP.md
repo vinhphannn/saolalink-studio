@@ -13,7 +13,13 @@ using the serial monitor. Settings are not shared through Git; install the tools
 
 ## Install and start Studio
 
-Use Python 3.10 or newer. Installing Studio's GUI dependencies is necessary before launching Setup.
+For normal installation, follow [Download and start in README](../README.md#download-and-start):
+download/extract the whole Studio folder, then run **start-studio.cmd** (Windows) or
+**start-studio.sh** (Linux). Use Python 3.10 or newer with Tk. The launcher creates Studio's local
+`.venv` and installs GUI dependencies itself. You do not need to activate Python or run pip manually.
+These launchers are source launchers, not standalone compiled applications.
+
+The manual steps below are for an existing development environment or troubleshooting.
 After Studio starts, **Setup → Install missing…** can install supported missing build tools and
 Python packages with a review step. Checking setup or pressing Build never installs anything.
 
@@ -73,7 +79,16 @@ A separate Python environment may be selected for firmware builds.
 13. Preferred serial port and baud: optional defaults, never an automatic connection.
     Select the actual COM/tty device after scanning; port numbers can change between machines.
 
-Use Detect tools to populate tools found on PATH, then review the form. It does not download anything.
+Basic Setup shows the two project folders and a three-step checklist. Other paths are hidden under
+**Show tool paths and advanced options**. **Setup guide** opens a step-by-step guide with
+clickable official download pages, what package/architecture to choose, and what file/folder to Browse to.
+
+Use **Find tools** to populate installed paths and check readiness. It searches PATH, Windows registry
+PATH, standard CMake/Git/LLVM installations, known tool names in workspace `.tools`, Downloads/tools,
+and common system directories. It does not scan entire disks or download anything. Working custom
+paths and the selected CMake generator are preserved. The Arm compiler is selected only if it reports
+14.2.1. A portable tool extracted somewhere else may require Browse. Checks show **NEXT STEPS** above
+the detailed results, including instructions for items without an automatic installer.
 Check setup checks the form values. Save & apply activates and persists them. Changing configuration
 is blocked during an operation or an active serial connection. Disconnect and wait for tasks first.
 
@@ -85,7 +100,8 @@ is blocked during an operation or an active serial connection. Disconnect and wa
 3. Click **Install & recheck** to run the listed installers. Complete the operating system's
    administrator authentication or publisher installer dialog if one opens. Progress and errors
    appear in Setup. Studio never asks for or stores administrator passwords.
-4. Review the recheck and updated paths, then **Save & apply**. If a newly discovered dependency
+4. Successfully installed tools are searched again and their paths are filled automatically.
+   Review the recheck and updated paths, then **Save & apply**. If a newly discovered dependency
    is still missing, use Install missing again to review the next repair.
 
 Supported system repairs:
@@ -98,7 +114,8 @@ Supported system repairs:
   If authentication is cancelled or unavailable, Setup reports that and stops.
 - Windows: CMake, Git, Ninja and LLVM through installed WinGet, with exact package IDs and the
   publisher's interactive installers. The review states that Install accepts the WinGet source
-  and package agreements. Restart Studio if Windows has not exposed new tools on PATH yet.
+   and package agreements. Studio also searches refreshed registry PATH and common vendor locations.
+   Restart Studio if a new tool is still not exposed by Windows yet.
 - Missing EdgeTX Python modules: install the selected checkout into the chosen build virtual
   environment. If Build Python is a system Python, Studio creates a private virtual environment
   under its per-user cache folder instead of modifying system Python. On Debian/Ubuntu this may
@@ -182,3 +199,21 @@ When upgrading an existing workspace, auto-detection preserves its previous CMak
 If you change generators or move EdgeTX while reusing output, Studio reports incompatible caches
 before configuring. Choose the affected board/mode and use Build → Clean, or select a new output
 folder in Setup. Checking setup never deletes previous firmware artifacts.
+
+## Launcher troubleshooting
+
+| Symptom | Action |
+| --- | --- |
+| Windows opens a Python install page / says Python not found | Install desktop Python 3.10+ with Tcl/Tk and pip from the link in README. Include the launcher/PATH option. Open start-studio.cmd again. Do not use the embedded Python ZIP. |
+| Linux opens the shell script in an editor | Allow executing it in file Properties, then Run as Program / Run in Terminal. Alternatively open a terminal in the extracted Studio folder and run `bash start-studio.sh`. File-manager behavior varies. |
+| Missing tkinter / venv / ensurepip | Install the OS prerequisites listed in README. For a non-default Python version, install that version's matching venv/Tk support or select your distribution Python. |
+| Download / pip / certificate / proxy error | Check internet and your company's trusted proxy/certificate configuration; run the launcher again. It prints the actual installer error. Do not disable certificate verification. |
+| Folder not writable | Extract Studio into a folder you own, outside Program Files / protected locations. The launcher needs to create its .venv. |
+| Studio moved, Python upgraded, or .venv no longer runs | Close Studio, remove only the Studio .venv folder, then run its launcher again. Never delete EdgeTX or firmware output for this repair. Saved settings are in the user profile and remain available. |
+| Setup has many missing tools | First choose the real EdgeTX Git checkout, then Find tools → Install missing. Follow NEXT STEPS and Setup guide for the remaining vendor tools. |
+| No Install missing button / old form remains visible | Close old Studio windows and open the updated launcher/checkout. A running Python process does not reload changed UI code. |
+| New firmware checkout path is not remembered | Save & apply, check the User settings path, and remove conflicting environment overrides. Use separate native settings per Windows/Linux installation. |
+
+After the first successful launcher run, unchanged requirements are reused. The launcher verifies that
+its local environment and GUI imports still work; a changed requirements file triggers dependency
+installation again. It does not download EdgeTX or install firmware tools until requested from Setup.

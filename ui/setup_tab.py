@@ -2,11 +2,14 @@
 from pathlib import Path
 from tkinter import filedialog, messagebox
 import os
+import webbrowser
 import customtkinter as ctk
 
-from core.config import AppConfig, settings_path
+from core.config import settings_path
 from core.diagnostics import diagnose
 from core.setup_repair import make_plan, install
+from core.tool_discovery import discover_tools
+from core.setup_guidance import GETTING_STARTED, DOWNLOADS, next_steps
 
 FIELDS = (
     ('source', 'EdgeTX checkout', 'directory'),
@@ -35,18 +38,23 @@ class SetupTab(ctk.CTkFrame):
         self.buttons = []
         self._busy = None
         self.repair_window = None
+        self.advanced_widgets = []
         ctk.CTkLabel(self, text='Machine setup', font=ctk.CTkFont(size=24, weight='bold')).pack(anchor='w', pady=(8, 0))
+        ctk.CTkLabel(self, text='1  Choose project folders    →    2  Find / install tools    →    3  Check & save', anchor='w').pack(fill='x')
         self.notice = ctk.CTkLabel(self, text='Select paths for this computer. Save & apply, then check setup.', anchor='w')
         self.notice.pack(fill='x')
         ctk.CTkLabel(self, text=f'User settings: {settings_path()}', anchor='w', text_color='gray65').pack(fill='x')
         overrides = [name for name in ('EDGETX_DIR', 'SAOLALINK_BUILD_DIR', 'ARM_TOOLCHAIN_DIR') if os.environ.get(name)]
         if overrides:
             ctk.CTkLabel(self, text='Environment overrides on next launch: ' + ', '.join(overrides), text_color='#efbd63').pack(anchor='w')
+        self.advanced = ctk.CTkCheckBox(self, text='Show tool paths and advanced options', command=self.toggle_advanced)
+        self.advanced.pack(anchor='w', pady=(8, 0))
         form = ctk.CTkScrollableFrame(self, height=230)
         form.pack(fill='both', expand=True, pady=6)
         form.grid_columnconfigure(1, weight=1)
         for row, (name, label, kind) in enumerate(FIELDS):
-            ctk.CTkLabel(form, text=label, anchor='w').grid(row=row, column=0, padx=8, pady=4, sticky='w')
+            caption = ctk.CTkLabel(form, text=label, anchor='w')
+            caption.grid(row=row, column=0, padx=8, pady=4, sticky='w')
             entry = ctk.CTkEntry(form)
             entry.grid(row=row, column=1, padx=4, pady=4, sticky='ew')
             self.entries[name] = entry
@@ -54,17 +62,31 @@ class SetupTab(ctk.CTkFrame):
                 button = ctk.CTkButton(form, text='Browse…', width=85, command=lambda n=name, k=kind: self.browse(n, k))
                 button.grid(row=row, column=2, padx=8)
                 self.buttons.append(button)
+            if name not in ('source', 'builds'):
+                self.advanced_widgets += [caption, entry] + ([button] if kind else [])
         row = len(FIELDS)
-        ctk.CTkLabel(form, text='CMake generator', anchor='w').grid(row=row, column=0, padx=8, pady=4, sticky='w')
+        generator_caption = ctk.CTkLabel(form, text='CMake generator', anchor='w')
+        generator_caption.grid(row=row, column=0, padx=8, pady=4, sticky='w')
         self.generator = ctk.CTkOptionMenu(form, values=['Ninja', 'Unix Makefiles', 'MinGW Makefiles', 'NMake Makefiles'])
         self.generator.grid(row=row, column=1, padx=4, pady=4, sticky='w')
-        ctk.CTkLabel(form, text='Default serial baud rate', anchor='w').grid(row=row + 1, column=0, padx=8, pady=4, sticky='w')
+        baud_caption = ctk.CTkLabel(form, text='Default serial baud rate', anchor='w')
+        baud_caption.grid(row=row + 1, column=0, padx=8, pady=4, sticky='w')
         self.baud = ctk.CTkOptionMenu(form, values=['9600', '19200', '38400', '57600', '115200', '230400', '460800', '921600'])
         self.baud.grid(row=row + 1, column=1, padx=4, pady=4, sticky='w')
+        self.advanced_widgets += [generator_caption, self.generator, baud_caption, self.baud]
+        self.basic_help = ctk.CTkLabel(form, text=(
+            'Start with Find tools. Installed tools are filled automatically.\n\n'
+            'Then Install missing to review downloads and complete the OS installer dialogs.\n\n'
+            'If something still needs a vendor download, Setup guide explains which package to choose '
+            'and where to point Browse. Check setup shows your next steps.'), wraplength=800, justify='left', anchor='w')
+        self.basic_help.grid(row=2, column=0, columnspan=3, padx=8, pady=18, sticky='w')
+        self.toggle_advanced()
+        ctk.CTkLabel(self, text='Tool paths are filled automatically when found. Setup guide includes download links and manual steps.',
+                    anchor='w', text_color='gray65').pack(fill='x')
         bar = ctk.CTkFrame(self, fg_color='transparent')
         bar.pack(fill='x', pady=4)
-        for label, callback in [('Detect tools', self.detect), ('Save & apply', self.save),
-                                ('Check setup', self.check), ('Install missing…', self.repair),
+        for label, callback in [('Find tools', self.detect), ('Install missing…', self.repair),
+                                ('Check setup', self.check), ('Save & apply', self.save),
                                 ('Setup guide', self.guide), ('Export checks', self.export)]:
             button = ctk.CTkButton(bar, text=label, width=125, command=callback)
             button.pack(side='left', padx=(0, 6))
@@ -72,6 +94,11 @@ class SetupTab(ctk.CTkFrame):
         self.results = ctk.CTkTextbox(self, height=130, font=('Courier', 12))
         self.results.pack(fill='x', pady=(4, 0))
         self.fill(app.config_data)
+
+    def toggle_advanced(self):
+        for widget in self.advanced_widgets:
+            widget.grid() if self.advanced.get() else widget.grid_remove()
+        self.basic_help.grid_remove() if self.advanced.get() else self.basic_help.grid()
 
     def fill(self, config):
         for name, entry in self.entries.items():
@@ -95,15 +122,20 @@ class SetupTab(ctk.CTkFrame):
         return self.app.config_data.updated(values)
 
     def detect(self):
-        detected = AppConfig.detected()
-        # Preserve user-chosen source/output and optional settings while refreshing tools.
-        for name in ('toolchain', 'cmake', 'git', 'build_tool', 'build_python', 'dfu_util', 'llvm'):
-            value = getattr(detected, name)
-            if value:
-                entry = self.entries[name]
-                entry.delete(0, 'end'); entry.insert(0, str(value))
-        self.generator.set(detected.generator)
-        self.notice.configure(text='Detected tools placed in the form. Review, then Save & apply.')
+        try:
+            config = self.candidate()
+        except Exception as error:
+            self.notice.configure(text=str(error)); return
+        self.notice.configure(text='Finding installed tools and checking paths…')
+        def work():
+            found = discover_tools(config)
+            self.app.events.put(('setup_detected', (found, diagnose(found, scan=True))))
+        self.app.background(work)
+
+    def show_detected(self, result):
+        config, checks = result
+        self.fill(config)
+        self.show_checks(checks)
 
     def save(self):
         try:
@@ -121,7 +153,7 @@ class SetupTab(ctk.CTkFrame):
         self.app.background(lambda: self.app.events.put(('setup_checks', diagnose(config, scan=True))))
 
     def show_checks(self, checks):
-        text = '\n\n'.join(map(str, checks))
+        text = 'NEXT STEPS\n' + next_steps(checks) + '\n\nCHECK DETAILS\n' + '\n\n'.join(map(str, checks))
         self.results.delete('1.0', 'end'); self.results.insert('end', text)
         errors = sum(check.status == 'error' for check in checks)
         self.notice.configure(text=f'Check complete: {errors} error(s). Checks use the form values; Save & apply activates changes.')
@@ -133,11 +165,13 @@ class SetupTab(ctk.CTkFrame):
             self.notice.configure(text=str(error)); return
         self.notice.configure(text='Checking what can be installed. You can review the list before installing…')
         def prepare():
-            checks = diagnose(config)
-            self.app.events.put(('setup_repair_plan', make_plan(config, checks)))
+            found = discover_tools(config)
+            checks = diagnose(found)
+            self.app.events.put(('setup_repair_plan', make_plan(found, checks)))
         self.app.background(prepare)
 
     def show_repair_plan(self, plan):
+        self.fill(plan.config)
         self.show_checks(plan.checks)
         if self.repair_window and self.repair_window.winfo_exists():
             self.repair_window.destroy()
@@ -177,6 +211,7 @@ class SetupTab(ctk.CTkFrame):
         config, checks, failures = result
         self.fill(config)
         self.install_log('\n' + '\n\n'.join(map(str, checks)) + '\n')
+        self.install_log('\nNEXT STEPS\n' + next_steps(checks) + '\n')
         errors = sum(check.status == 'error' for check in checks)
         self.notice.configure(text=(f'Installation stopped: {failures[0]}' if failures else
             f'Installation finished; recheck: {errors} error(s).') + ' Review the form, then Save & apply.')
@@ -194,8 +229,28 @@ class SetupTab(ctk.CTkFrame):
             review.destroy()
         window = ctk.CTkToplevel(self)
         window.title('SaolaLink Studio — Setup guide'); window.geometry('850x650')
-        text = ctk.CTkTextbox(window, wrap='word')
-        text.pack(fill='both', expand=True, padx=12, pady=12)
+        frame = ctk.CTkScrollableFrame(window); frame.pack(fill='both', expand=True, padx=12, pady=12)
+        ctk.CTkLabel(frame, text='Set up this computer', font=ctk.CTkFont(size=22, weight='bold')).pack(anchor='w', pady=8)
+        for title, detail in GETTING_STARTED:
+            ctk.CTkLabel(frame, text=title, font=ctk.CTkFont(weight='bold')).pack(anchor='w', pady=(10, 2))
+            ctk.CTkLabel(frame, text=detail, wraplength=750, justify='left', anchor='w').pack(fill='x')
+        for title, url, detail in DOWNLOADS:
+            ctk.CTkLabel(frame, text=title, font=ctk.CTkFont(weight='bold')).pack(anchor='w', pady=(16, 2))
+            ctk.CTkLabel(frame, text=detail, wraplength=750, justify='left', anchor='w').pack(fill='x')
+            ctk.CTkButton(frame, text='Open official page', command=lambda link=url: self.open_link(link)).pack(anchor='w', pady=5)
+        ctk.CTkButton(frame, text='Read full setup reference', command=self.reference).pack(anchor='w', pady=18)
+
+    def open_link(self, url):
+        try:
+            if not webbrowser.open(url):
+                raise OSError('No default browser found. Open this address manually:\n' + url)
+        except OSError as error:
+            messagebox.showerror('Open download page', str(error), parent=self)
+
+    def reference(self):
+        window = ctk.CTkToplevel(self)
+        window.title('SaolaLink Studio — Full setup reference'); window.geometry('850x650')
+        text = ctk.CTkTextbox(window, wrap='word'); text.pack(fill='both', expand=True, padx=12, pady=12)
         text.insert('end', (Path(__file__).resolve().parents[1] / 'docs/SETUP.md').read_text(encoding='utf-8'))
         text.configure(state='disabled')
 

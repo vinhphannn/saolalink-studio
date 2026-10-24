@@ -4,49 +4,125 @@ Desktop build/flash tool for Saolatek RC transmitters, using a small
 `core/` + `ui/` architecture.
 Python + CustomTkinter; core services also work through a CLI without Tk.
 
-## Run
+## Download and start
 
-Clone Studio and the SaolaLink EdgeTX fork as sibling directories. From a
-workspace directory (for example `saolatek`):
+Studio is currently distributed as source, with launch scripts; this repository does not yet
+provide a standalone `.exe` or AppImage. Python is needed once on each machine. The launchers
+create a private `.venv`, install Studio's GUI packages on first launch, and open the app.
+You do not need to activate a virtual environment or type pip commands. Internet is needed for
+the initial dependency download; an unchanged, prepared launcher does not reinstall packages.
 
-```bash
-git clone https://github.com/vinhphannn/saolalink-studio.git
-git clone --branch SAOLALINKV1 https://github.com/vinhphannn/edgetx.git
-git -C edgetx submodule update --init --recursive
+Download [Studio ZIP](https://github.com/vinhphannn/saolalink-studio/archive/refs/heads/main.zip)
+and **extract the whole ZIP** into a writable folder, or clone
+[the Studio repository](https://github.com/vinhphannn/saolalink-studio).
+Run from the extracted folder, not inside the ZIP. Studio and EdgeTX may be in different locations.
+
+| Computer | Prerequisites | Start Studio |
+| --- | --- | --- |
+| Windows 10/11, x64 | Desktop Python 3.10+ with Tcl/Tk and pip; Python 3.12 is used in CI. Install [Python for Windows](https://www.python.org/downloads/windows/), including the launcher / PATH option when offered. | Double-click **start-studio.cmd**. A console shows first-launch installation progress and errors. Keep it open while Studio is running. No PowerShell activation is needed. |
+| Fedora Workstation, x86_64 | Python 3, pip and Tk; see the one-time package command below. Desktop Polkit authentication is needed for Install missing. | Open **start-studio.sh** with Run as Program / Run in Terminal if your file manager supports it. If required, allow executing the script in Properties → Permissions. Terminal fallback: `bash start-studio.sh`. |
+| Ubuntu / Debian desktop, x86_64 | Python 3 with venv, pip and Tk; see below. Desktop Polkit authentication is needed for Install missing. | Run **start-studio.sh**, with the same file-manager or terminal steps as Fedora. |
+| Linux ARM64, Windows ARM64, macOS | Not validated by this project's build/USB test matrix. | Do not assume an x64 toolchain works natively. Linux ARM64 needs an appropriate host Arm GNU package; manual setup and hardware validation are required. macOS has no automatic installer flow here. |
+
+### Linux prerequisites (once per machine)
+
+These OS packages must exist before a Python GUI can start. The launcher reports a missing
+Python/Tk/venv component; it does not run Studio as root.
+
+Fedora:
+
+```sh
+sudo dnf install python3 python3-pip python3-tkinter
 ```
 
-Then, from that same workspace directory:
+Ubuntu / Debian:
 
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r saolalink-studio/requirements.txt -e ./edgetx
-.venv/bin/python saolalink-studio/main.py
+```sh
+sudo apt update
+sudo apt install python3 python3-pip python3-venv python3-tk
 ```
 
-To install an application-menu entry and Desktop shortcut, and pin it to GNOME dash:
+Then open `start-studio.sh` from the extracted Studio folder. If a Linux file manager opens the
+script in an editor, choose Run as Program / Run in Terminal, or open a terminal in that folder
+and run `bash start-studio.sh`. Do not copy another member's `.venv` to your computer.
 
-```bash
-.venv/bin/python saolalink-studio/install_desktop.py --pin
+For an optional Linux application-menu/Desktop shortcut after first launch, from the Studio folder:
+
+```sh
+.venv/bin/python install_desktop.py
 ```
 
-The Linux launcher uses the Python environment running the installer and includes a custom RC radio
-icon. Omit `--pin` to install shortcuts without changing GNOME favorites. Re-run
-the installer after moving the project. `Ctrl+C` in a terminal stops the active
-operation and exits the GUI without a traceback.
+Add `--pin` for a GNOME favorite. Re-run the shortcut installer after moving Studio. Existing
+users may keep their current Python environment and shortcut; close/reopen Studio after updates.
+If you move a launcher installation, remove only its disposable `.venv` and run the launcher again.
+Saved machine settings are separate; see [the full setup reference](docs/SETUP.md).
 
-The GUI needs a working display and Tk (`python3-tk` on Ubuntu, `python3-tkinter` on Fedora).
-For native Windows setup, see [docs/SETUP.md](docs/SETUP.md).
-Build needs CMake >= 3.24, a native C/C++ compiler, Make (or the CMake default
-generator), and **Arm GNU Toolchain 14.2.rel1**. EdgeTX rejects other ARM GCC
-versions. The project-local toolchain is detected automatically at
-`.tools/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi/bin`.
-DFU needs `dfu-util` and USB access for STM32 `0483:df11`.
+## First-time setup in the app
 
-Environment overrides:
+1. **Choose project folders.** In Setup, Browse to your EdgeTX Git clone (the folder containing
+   `CMakeLists.txt` and `radio/`). Choose a writable build output folder outside both source trees.
+   See **Get the EdgeTX source** below if this is a new computer.
+2. **Find tools.** Studio searches PATH, current Windows registry PATH, common vendor install
+   locations, workspace `.tools`, and known tool folders under Downloads/tools. Found paths are
+   filled in automatically. Valid custom selections and the existing generator are preserved.
+3. **Install missing… → Install & recheck.** Review the proposed packages first. Complete any OS
+   authentication / vendor installer dialog. Progress appears in Setup. Successfully installed
+   tools are searched again and their paths are filled automatically. Python build dependencies
+   go into the selected virtual environment, or a private build environment if a system Python
+   was selected. No root pip installation is used.
+4. **Follow NEXT STEPS.** Check results say what remains to do. **Setup guide** has clickable
+   official download pages and instructions. **Show tool paths and advanced options** reveals
+   individual paths only when you need them. Files installed outside the searched locations
+   may still need Browse; Studio does not scan your whole disk.
+5. **Check setup → Save & apply.** Filled paths are not activated until saved. Settings are per
+   user and reused on later launches. If only USB/COM is needed, a broken firmware toolchain
+   does not block the serial monitor.
 
-- `EDGETX_DIR`: EdgeTX source directory; defaults to `../edgetx` relative to Studio.
-- `SAOLALINK_BUILD_DIR`: output directory; defaults to the project's `build/`.
-- `ARM_TOOLCHAIN_DIR`: the **bin directory** containing `arm-none-eabi-g++`.
+| Component | Automatic installation | Manual choice if still missing |
+| --- | --- | --- |
+| CMake ≥ 3.24, Git, Ninja/Make | Fedora/Ubuntu/Debian; CMake/Git/Ninja through WinGet on Windows | Use the vendor link in Setup guide, install the native version, then Find tools. For a portable copy, Browse to its executable. Keep the build generator matched to Ninja/Make. |
+| Arm GNU **14.2.rel1** (compiler **14.2.1**) | Vendor download/selection required | Open Setup guide → Arm GNU. Choose target **arm-none-eabi**. Windows x64: `mingw-w64-x86_64` host package; Linux x64: `x86_64` host package. Install/extract the full archive, then Find tools or Browse to its root/bin folder. Do not choose an arbitrary newer release. |
+| Native LLVM / libclang and headers | Fedora/Ubuntu/Debian; WinGet LLVM on Windows | Setup guide explains the native installation. Windows folder must contain `libclang.dll`; Python clang bindings alone are not enough. |
+| EdgeTX Python packages | Install missing, after selecting a valid EdgeTX checkout | Usually no paths to type. The selected/new build Python is filled after a successful install; Save & apply. |
+| Host C/C++ compiler | Fedora/Ubuntu/Debian packages | Windows needs a native compiler/SDK: use LLVM with a suitable Windows SDK or Visual Studio C++ tools. For MSVC select `VsDevCmd.bat` in advanced options. Arm GCC is not the host compiler. |
+| dfu-util | Fedora/Ubuntu/Debian packages | Windows: Setup guide → dfu-util, extract the Windows binaries including companion DLLs, then Browse to `dfu-util.exe`. |
+| USB DFU driver / serial permissions | Requires selecting the correct device/interface | Follow [USB and COM instructions](docs/SETUP.md#usb-dfu-and-serial-access). Windows DFU uses a compatible WinUSB driver; CDC/COM keeps its serial driver. Linux needs udev/group access. A successful tool check does not verify real USB access. |
+
+Check setup and Build never start installers automatically. A missing item outside the supported
+repair list stays visible with instructions. If a new Windows installation is not found, restart
+Studio to refresh the process environment and use Find tools again.
+
+## Get the EdgeTX source
+
+Use [the SaolaLink EdgeTX fork, branch SAOLALINKV1](https://github.com/vinhphannn/edgetx/tree/SAOLALINKV1).
+For a graphical clone, use GitHub Desktop on Windows or your Git client: clone the fork, switch to
+**SAOLALINKV1**, and initialize the recorded submodules. Git command-line tools are still needed
+by builds. A firmware source ZIP has no Git checkout/history and will fail those checks.
+
+If your Git client does not offer submodule initialization, use its terminal once. These commands
+work in a Git-equipped terminal on both systems; substitute your clone location:
+
+```sh
+git clone --branch SAOLALINKV1 --recurse-submodules https://github.com/vinhphannn/edgetx.git
+# For an existing clone:
+git -C /path/to/edgetx submodule update --init --recursive
+```
+
+In Setup, Browse to that clone; it does not have to sit beside Studio. A new checkout may need
+network access again during the first CMake build. Updates to the two repositories are separate.
+
+## Update or repair a Studio installation
+
+Close Studio before updating. Git users can pull the Studio repository; ZIP users can extract a
+fresh download into a new folder and run its launcher. Launch scripts refresh GUI requirements
+when `requirements.txt` changes. If startup fails, its console shows the reason; see
+[troubleshooting](docs/SETUP.md#launcher-troubleshooting). After moving EdgeTX/tools, use Setup
+again. Machine-specific paths are never copied through Git.
+
+Existing environment overrides remain supported: `EDGETX_DIR`, `SAOLALINK_BUILD_DIR` and
+`ARM_TOOLCHAIN_DIR` (Arm root or bin). Remove a stale override if a saved path seems to revert.
+
+## Firmware defaults
 
 The GUI defaults to **SaolaLink DevEBox 8MHz (EdgeTX USB)** for the current bare
 development board. CLI defaults to **SaolaLink V1** (12 MHz).
@@ -78,8 +154,9 @@ inline functions and affect single-stepping.
   Pocket drift, local HAL overrides, integration diff against a fixed upstream
   commit; export a report. Building both profiles also exposes effective HAL macro differences.
 
-The operation log remains visible across tabs, with one file per operation in
-`build/logs/`. The runner serializes operations and stops child process groups.
+The operation log is available in the work tabs, with one file per operation in
+the configured build folder's `logs/`. Setup uses its own check/installation output area.
+The runner serializes operations and stops child process groups.
 
 Serial discovery is intentionally separate from DFU discovery. USB-TTL bridges
 (CH340, CP210x, FTDI, etc.) and native USB CDC ports are listed without filtering
@@ -97,15 +174,17 @@ Restart Studio after updating code. `pyserial>=3.5,<4` is included in requiremen
 
 ## CLI
 
+From the Studio folder after running its launcher (Windows uses `.venv\Scripts\python.exe`):
+
 ```bash
-.venv/bin/python saolalink-studio/cli.py doctor
-.venv/bin/python saolalink-studio/cli.py build --profile saolalink-v1 --mode Debug
-.venv/bin/python saolalink-studio/cli.py build --profile pocket --mode Debug
-.venv/bin/python saolalink-studio/cli.py build --kind bootloader
-.venv/bin/python saolalink-studio/cli.py compare > build/pocket-comparison.diff
-.venv/bin/python saolalink-studio/cli.py devices
+.venv/bin/python cli.py doctor
+.venv/bin/python cli.py build --profile saolalink-v1 --mode Debug
+.venv/bin/python cli.py build --profile pocket --mode Debug
+.venv/bin/python cli.py build --kind bootloader
+.venv/bin/python cli.py compare
+.venv/bin/python cli.py devices
 # Replace 1-2 with the exact path reported by devices:
-.venv/bin/python saolalink-studio/cli.py flash --usb-path 1-2 --kind firmware
+.venv/bin/python cli.py flash --usb-path 1-2 --kind firmware
 ```
 
 Flash does not build automatically. It requires a successful Studio build and a
@@ -139,7 +218,7 @@ USB drivers and device permissions must be configured on each machine.
 ## Verify
 
 ```bash
-.venv/bin/python -m unittest discover -s saolalink-studio/tests -v
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
 Tests cover operation failure/cancellation, isolation, full-image flags, artifact

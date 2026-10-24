@@ -188,6 +188,8 @@ class AppWindow(ctk.CTk):
                     elif kind == 'setup_checks':
                         self.setup_tab.show_checks(value)
                         self.append('\n'.join(map(str, value)) + '\n')
+                    elif kind == 'setup_detected':
+                        self.setup_tab.show_detected(value)
                     elif kind == 'setup_repair_plan':
                         self.setup_tab.show_repair_plan(value)
                     elif kind == 'setup_install_log':

@@ -1,13 +1,13 @@
 """Explicit, reviewable dependency installation, separate from read-only checks."""
 from dataclasses import dataclass
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 
 from core.config import data_dir
+from core.tool_discovery import discover_tools
 
 
 @dataclass(frozen=True)
@@ -129,35 +129,18 @@ def make_plan(config, checks, *, platform=None, distro=None):
 def refreshed_config(config, checks):
     """Replace only failed selections when a repaired tool is actually discoverable."""
     failed = {check.name for check in checks if check.status == 'error'}
-    path = os.environ.get('PATH', '')
-    if sys.platform == 'win32':
-        import winreg
-        values = []
-        for hive, key in ((winreg.HKEY_LOCAL_MACHINE, r'SYSTEM\CurrentControlSet\Control\Session Manager\Environment'),
-                          (winreg.HKEY_CURRENT_USER, 'Environment')):
-            try:
-                with winreg.OpenKey(hive, key) as handle:
-                    values.append(os.path.expandvars(winreg.QueryValueEx(handle, 'Path')[0]))
-            except OSError:
-                pass
-        path = os.pathsep.join([path, *values])
-    updates = {}
-    for name, field, executable in (
-        ('CMake', 'cmake', 'cmake'), ('Git', 'git', 'git'), ('dfu-util', 'dfu_util', 'dfu-util'),
-        ('Host C compiler', 'native_cc', 'cc'), ('Host C++ compiler', 'native_cxx', 'c++'),
-        (f'Build tool ({config.generator})', 'build_tool', 'ninja' if config.generator == 'Ninja' else 'make'),
+    fields = set()
+    for name, field in (
+        ('CMake', 'cmake'), ('Git', 'git'), ('dfu-util', 'dfu_util'),
+        ('Host C compiler', 'native_cc'), ('Host C++ compiler', 'native_cxx'),
+        (f'Build tool ({config.generator})', 'build_tool'),
     ):
-        if name in failed and (found := shutil.which(executable, path=path)):
-            updates[field] = found
+        if name in failed:
+            fields.add(field)
     if 'LLVM/libclang' in failed:
-        # Clearing a stale override lets the EdgeTX loader find the repaired system installation.
-        updates['llvm'] = ''
-        if sys.platform == 'win32':
-            found = shutil.which('clang', path=path)
-            folder = Path(found).parent if found else Path(os.environ.get('ProgramFiles', 'C:/Program Files')) / 'LLVM/bin'
-            if (folder / 'libclang.dll').is_file():
-                updates['llvm'] = str(folder)
-    return config.updated(updates)
+        fields.add('llvm')
+        config = config.updated({'llvm': ''})
+    return discover_tools(config, only=fields)
 
 
 def install(plan, log):

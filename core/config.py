@@ -104,7 +104,8 @@ class AppConfig:
         def tool(name):
             return shutil.which(name) or name
         llvm = shutil.which('clang')
-        return cls(
+        from core.tool_discovery import discover_tools
+        return discover_tools(cls(
             PROJECT_DIR / 'edgetx',
             builds,
             toolchain,
@@ -113,7 +114,7 @@ class AppConfig:
                              'NMake Makefiles': 'nmake'}[generator]), generator=generator,
             native_cc=os.environ.get('CC', ''), native_cxx=os.environ.get('CXX', ''),
             llvm=str(Path(llvm).parent) if llvm else '',
-        )
+        ))
 
     @classmethod
     def load(cls, path=None):
