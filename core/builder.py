@@ -77,12 +77,12 @@ class FirmwareBuilder:
 
     def record_artifact(self, profile, mode, kind):
         directory = self.config.build_dir(profile, mode) / 'arm-none-eabi'
-        cache = (directory / 'CMakeCache.txt').read_text()
+        cache = (directory / 'CMakeCache.txt').read_text(encoding='utf-8')
         for key, value in {'PCB': profile.pcb, 'PCBREV': profile.pcbrev, 'CMAKE_BUILD_TYPE': mode,
                            'BOOTLOADER': 'ON', 'FIRMWARE_STRIP_BOOTLOADER': 'OFF'}.items():
             if not re.search(rf'^{key}:[^=]+={re.escape(value)}$', cache, re.M):
                 raise ValueError(f'Actual CMake config does not match {key}={value}')
-        definitions = (directory / 'radio/src' / f'{profile.flavour}.json.h').read_text()
+        definitions = (directory / 'radio/src' / f'{profile.flavour}.json.h').read_text(encoding='utf-8')
         if profile.key == 'saolalink-devebox' and not re.search(r'^SAOLALINK_DEVEBOX:[^=]+=ON$', cache, re.M):
             raise ValueError('DevEBox USB adaptation is not enabled in this build')
         if not re.search(rf'^#define RADIO_{profile.flavour.upper()} 1$', definitions, re.M):
@@ -113,14 +113,14 @@ class FirmwareBuilder:
                     'built_at': datetime.now(timezone.utc).isoformat()}
         manifest['hse_hz'] = profile.hse_hz
         manifest['devebox_usb'] = profile.key == 'saolalink-devebox'
-        binary.with_suffix('.manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+        binary.with_suffix('.manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
         if kind == 'firmware' and profile.key == 'saolalink-devebox':
             self.record_artifact(profile, mode, 'bootloader')
             app = directory / 'application.bin'
             app.write_bytes(binary.read_bytes()[profile.bootloader_size:])
             app_info = dict(manifest, kind='application', address='0x08008000',
                             bootloader_included=False, size=app.stat().st_size, sha256=digest(app))
-            app.with_suffix('.manifest.json').write_text(json.dumps(app_info, indent=2) + '\n')
+            app.with_suffix('.manifest.json').write_text(json.dumps(app_info, indent=2) + '\n', encoding='utf-8')
         return f'Artifact: {binary}\nSize: {manifest["size"]} bytes | SHA256: {manifest["sha256"]}'
 
     def artifact(self, profile, mode, kind):
@@ -130,7 +130,7 @@ class FirmwareBuilder:
         manifest = binary.with_suffix('.manifest.json')
         if not binary.is_file() or not manifest.is_file():
             raise ValueError('Build this target successfully in Studio before flashing')
-        info = json.loads(manifest.read_text())
+        info = json.loads(manifest.read_text(encoding='utf-8'))
         expected = {'profile': profile.key, 'pcbrev': profile.pcbrev, 'mode': mode, 'kind': kind, 'address': profile.flash_address}
         if profile.key == 'saolalink-devebox':
             expected['devebox_usb'] = True

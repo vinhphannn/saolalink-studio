@@ -28,6 +28,9 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
         assert 'Refresh' in app.flash_tab.devices.get()
         app.setup_tab.guide()
         app.update()
+        for child in app.winfo_children():
+            if isinstance(child, ctk.CTkToplevel):
+                child.destroy()
         # Applying configuration is forbidden while an operation is in progress.
         app._checking = True
         try:

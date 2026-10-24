@@ -55,7 +55,7 @@ class CompareTab(ctk.CTkFrame):
         path = filedialog.asksaveasfilename(defaultextension='.diff', initialfile='saolalink-v1-vs-pocket.diff')
         if path:
             try:
-                with open(path, 'w') as output:
+                with open(path, 'w', encoding='utf-8') as output:
                     output.write(self.text.get('1.0', 'end'))
             except OSError as error:
                 messagebox.showerror('Export failed', str(error))
