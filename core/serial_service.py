@@ -3,6 +3,7 @@ import codecs
 from dataclasses import dataclass
 import queue
 import threading
+import os
 
 import serial
 from serial.tools import list_ports
@@ -101,7 +102,7 @@ class SerialMonitor:
             conn.rts = False
             conn.port = self.port
             # Prevent a second instance from opening the same port on POSIX.
-            if hasattr(conn, 'exclusive'):
+            if os.name == 'posix' and hasattr(conn, 'exclusive'):
                 conn.exclusive = True
             conn.open()
             if self._stop.is_set():

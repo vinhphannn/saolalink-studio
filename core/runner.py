@@ -9,8 +9,9 @@ from datetime import datetime
 from pathlib import Path
 
 class OperationRunner:
-    def __init__(self, log_dir: Path):
+    def __init__(self, log_dir: Path, env=None):
         self.log_dir = log_dir
+        self.env = env
         self.events = queue.Queue()
         self._lock = threading.Lock()
         self._cancel = threading.Event()
@@ -46,17 +47,18 @@ class OperationRunner:
         try:
             self.log_dir.mkdir(parents=True, exist_ok=True)
             log_path = self.log_dir / f'{datetime.now():%Y%m%d-%H%M%S-%f}-{name}.log'
-            log = log_path.open('w')
+            log = log_path.open('w', encoding='utf-8')
             self.events.put(('started', str(log_path)))
             for command in commands:
                 with self._lock:
                     if self._cancel.is_set():
                         raise RuntimeError('Operation cancelled')
-                    emit('> ' + shlex.join(command) + '\n')
+                    emit('> ' + (subprocess.list2cmdline(command) if os.name == 'nt' else shlex.join(command)) + '\n')
                     self._process = subprocess.Popen(
                         command, cwd=cwd, stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT, text=True, errors='replace',
-                        bufsize=1, start_new_session=(os.name == 'posix'))
+                        stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', env=self.env,
+                        bufsize=1, start_new_session=(os.name == 'posix'),
+                        creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW) if os.name == 'nt' else 0)
                     process = self._process
                 for line in process.stdout:
                     emit(line)
@@ -96,10 +98,21 @@ class OperationRunner:
                     if os.name == 'posix':
                         os.killpg(process.pid, signal.SIGTERM)
                     else:
-                        process.terminate()
+                        # Stop CMake/Ninja/compiler descendants too, without blocking Tk.
+                        threading.Thread(target=self._windows_stop, args=(process,), daemon=True).start()
                     threading.Thread(target=self._force_stop, args=(process,), daemon=True).start()
                 except ProcessLookupError:
                     pass
+
+    @staticmethod
+    def _windows_stop(process):
+        try:
+            subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
+        except (OSError, subprocess.SubprocessError):
+            if process.poll() is None:
+                process.kill()
 
     @staticmethod
     def _force_stop(process):

@@ -40,8 +40,18 @@ def parse_devices(output):
     return list(devices.values())
 
 class DeviceService:
+    def __init__(self, config=None):
+        self.config = config
+
     def discover(self):
-        result = subprocess.run(['dfu-util', '-l'], capture_output=True, text=True, timeout=10)
+        tool = self.config.tool('dfu-util') if self.config else 'dfu-util'
+        env = self.config.environment(build=False) if self.config else None
+        try:
+            result = subprocess.run([tool, '-l'], env=env, capture_output=True, text=True,
+                                    encoding='utf-8', errors='replace', timeout=10)
+        except FileNotFoundError:
+            raise RuntimeError('dfu-util was not found. Select dfu-util/dfu-util.exe in Setup.') from None
         if result.returncode:
-            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or 'DFU discovery failed')
+            raise RuntimeError((result.stderr.strip() or result.stdout.strip() or 'DFU discovery failed') +
+                               '\nCheck Setup, USB driver/access and whether another application owns the device.')
         return parse_devices(result.stdout)

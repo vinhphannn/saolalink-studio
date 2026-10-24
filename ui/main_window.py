@@ -6,19 +6,25 @@ from tkinter import PhotoImage
 import customtkinter as ctk
 from tkinter import messagebox
 
-from core.config import AppConfig, PROFILES
+from core.config import AppConfig, PROFILES, settings_path
 from core.builder import FirmwareBuilder
 from core.device_service import DeviceService
 from core.comparison import report, compare_generated
 from ui.workspaces import BuildTab, FlashTab, CompareTab
 from ui.serial_tab import SerialTab
+from ui.setup_tab import SetupTab
 
 class AppWindow(ctk.CTk):
     def __init__(self):
         super().__init__(className='SaolaLinkStudio')
         self.app_icon = PhotoImage(file=str(Path(__file__).resolve().parents[1] / 'assets/saolalink-studio.png'))
         self.iconphoto(True, self.app_icon)
-        self.config_data = AppConfig.default()
+        setup_error = ''
+        try:
+            self.config_data = AppConfig.default()
+        except ValueError as error:
+            setup_error = str(error)
+            self.config_data = AppConfig.detected()
         self.builder = FirmwareBuilder(self.config_data)
         self.events = queue.Queue()
         self.dfu_devices = []
@@ -34,20 +40,28 @@ class AppWindow(ctk.CTk):
         self.profile_picker.set(PROFILES['saolalink-devebox'].name)
         self.mode_picker = ctk.CTkOptionMenu(header, values=['Debug', 'Release'], width=100, command=lambda _: self.update_artifact())
         self.mode_picker.pack(side='left')
-        ctk.CTkButton(header, text='Stop task', width=100, fg_color='#943c3c', command=self.builder.runner.stop).pack(side='right', padx=12)
-        ctk.CTkLabel(self, text=f'Source: {self.config_data.source}', anchor='w').pack(fill='x', padx=24)
-        self.tabs = ctk.CTkTabview(self)
+        ctk.CTkButton(header, text='Stop task', width=100, fg_color='#943c3c', command=lambda: self.builder.runner.stop()).pack(side='right', padx=12)
+        ctk.CTkButton(header, text='Setup', width=75, command=self.open_setup).pack(side='right')
+        self.source_label = ctk.CTkLabel(self, text=f'Source: {self.config_data.source}', anchor='w')
+        self.source_label.pack(fill='x', padx=24)
+        self.tabs = ctk.CTkTabview(self, command=self.tab_changed)
         self.tabs.pack(fill='both', expand=True, padx=18, pady=8)
-        for name in ['Build', 'Flash', 'Serial monitor', 'Compare Pocket']:
+        for name in ['Build', 'Flash', 'Serial monitor', 'Compare Pocket', 'Setup']:
             self.tabs.add(name)
         self.build_tab = BuildTab(self.tabs.tab('Build'), self); self.build_tab.pack(fill='both', expand=True)
         self.flash_tab = FlashTab(self.tabs.tab('Flash'), self); self.flash_tab.pack(fill='both', expand=True)
-        self.serial_tab = SerialTab(self.tabs.tab('Serial monitor')); self.serial_tab.pack(fill='both', expand=True)
+        self.serial_tab = SerialTab(self.tabs.tab('Serial monitor'), self.config_data); self.serial_tab.pack(fill='both', expand=True)
         self.compare_tab = CompareTab(self.tabs.tab('Compare Pocket'), self); self.compare_tab.pack(fill='both', expand=True)
+        self.setup_tab = SetupTab(self.tabs.tab('Setup'), self); self.setup_tab.pack(fill='both', expand=True)
         self.status = ctk.CTkLabel(self, text='Ready', anchor='w'); self.status.pack(fill='x', padx=24)
         self.log = ctk.CTkTextbox(self, height=200, font=('monospace', 12)); self.log.pack(fill='x', padx=18, pady=(0, 18))
         self.log.insert('end', 'EdgeTX DevEBox: Build firmware first. Install bootloader once via ROM DFU; then upload application via EdgeTX USB DFU.\n')
         self.update_artifact()
+        if setup_error or not settings_path().is_file() or not (self.config_data.source / 'CMakeLists.txt').is_file():
+            self.open_setup()
+            self.setup_tab.notice.configure(text=setup_error or 'First run or moved checkout: select paths, Save & apply, then Check setup.')
+            if setup_error:
+                self.append('[SETUP] ' + setup_error + '\n')
         self.after(50, self.poll)
 
     @property
@@ -72,21 +86,48 @@ class AppWindow(ctk.CTk):
         threading.Thread(target=run, daemon=True).start()
 
     def doctor(self):
-        def check():
-            self.builder.preflight()
-            self.events.put(('log', '[OK] EdgeTX checkout, CMake and Arm GNU 14.2.1 are available.\n'))
-        self.background(check)
+        self.open_setup()
+        self.setup_tab.check()
+
+    def open_setup(self):
+        self.tabs.set('Setup')
+        self.tab_changed()
+
+    def tab_changed(self):
+        if not hasattr(self, 'log'):
+            return
+        if self.tabs.get() == 'Setup':
+            self.log.pack_forget()
+        elif not self.log.winfo_manager():
+            self.log.pack(fill='x', padx=18, pady=(0, 18))
+
+    def apply_setup(self, config):
+        if self.builder.runner.running or self._checking:
+            raise ValueError('Wait for the current task before applying Setup changes.')
+        if self.serial_tab.monitor.state != 'disconnected':
+            raise ValueError('Disconnect the serial monitor before applying Setup changes.')
+        config.save()
+        self.config_data = config
+        self.builder = FirmwareBuilder(config)
+        self.serial_tab.apply_config(config)
+        self.dfu_devices = []
+        self.flash_tab.devices.configure(values=['Refresh to discover devices'])
+        self.flash_tab.devices.set('Refresh to discover devices')
+        self.source_label.configure(text=f'Source: {config.source}')
+        self.update_artifact()
+        self.append('[SETUP] Saved machine settings to ' + str(settings_path()) + '\n')
 
     def operation(self, name, kind='firmware'):
         profile, mode = self.profile, self.mode_picker.get()
         self.background(lambda: self.builder.build(profile, mode, kind) if name == 'build' else getattr(self.builder, name)(profile, mode))
 
     def refresh_devices(self):
-        self.background(lambda: self.events.put(('devices', DeviceService().discover())))
+        self.background(lambda: self.events.put(('devices', DeviceService(self.config_data).discover())))
 
     def compare(self):
         mode = self.mode_picker.get()
-        self.background(lambda: self.events.put(('comparison', report(self.config_data.source) + compare_generated(self.config_data.builds, mode))))
+        self.background(lambda: self.events.put(('comparison', report(self.config_data.source,
+                        self.config_data.tool('git'), self.config_data.environment(build=False)) + compare_generated(self.config_data.builds, mode))))
 
     def flash(self, kind):
         if self.builder.runner.running or self._checking:
@@ -122,6 +163,8 @@ class AppWindow(ctk.CTk):
                     kind, value = events.get_nowait()
                     if kind in ('log', 'error'):
                         self.append(('[ERROR] ' if kind == 'error' else '') + value + ('\n' if kind == 'error' else ''))
+                        if kind == 'error':
+                            self.setup_tab.notice.configure(text='Task failed. Review paths and run Check setup. Details are in the operation log.')
                     elif kind == 'started':
                         self.status.configure(text='Running • Log: ' + value)
                     elif kind == 'finished':
@@ -136,13 +179,20 @@ class AppWindow(ctk.CTk):
                         self.flash_tab.devices.configure(values=labels); self.flash_tab.devices.set(labels[0])
                     elif kind == 'comparison':
                         self.compare_tab.set_report(value)
+                    elif kind == 'setup_checks':
+                        self.setup_tab.show_checks(value)
+                        self.append('\n'.join(map(str, value)) + '\n')
             except queue.Empty:
                 pass
         self.profile_picker.configure(state='disabled' if self.builder.runner.running or self._checking else 'normal')
         self.mode_picker.configure(state='disabled' if self.builder.runner.running or self._checking else 'normal')
+        self.setup_tab.set_busy(self.builder.runner.running or self._checking)
         self.after(50, self.poll)
 
     def close(self):
+        if self._checking:
+            self.append('[BUSY] Wait for setup/preflight checks to finish before closing.\n')
+            return
         if self.builder.runner.running:
             if not messagebox.askyesno('Stop operation', 'Stop the current operation and close Studio?'):
                 return

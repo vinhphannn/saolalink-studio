@@ -8,8 +8,9 @@ from core.serial_service import SerialMonitor, discover_ports
 
 
 class SerialTab(ctk.CTkFrame):
-    def __init__(self, master):
+    def __init__(self, master, config=None):
         super().__init__(master, fg_color='transparent')
+        self.preferred_port = config.serial_port if config else ''
         self.monitor = SerialMonitor()
         self.scan_events = queue.Queue()
         self.ports = []
@@ -25,7 +26,7 @@ class SerialTab(ctk.CTkFrame):
         self.port_picker = ctk.CTkComboBox(controls, values=['Scan for serial ports'], state='readonly', command=self.show_port)
         self.port_picker.grid(row=0, column=0, sticky='ew', padx=8, pady=8)
         self.baud = ctk.CTkComboBox(controls, width=110, state='readonly', values=['9600', '19200', '38400', '57600', '115200', '230400', '460800', '921600'])
-        self.baud.set('115200'); self.baud.grid(row=0, column=1, padx=4)
+        self.baud.set(str(config.serial_baud if config else 115200)); self.baud.grid(row=0, column=1, padx=4)
         self.scan_button = ctk.CTkButton(controls, text='Scan ports', width=95, command=self.scan)
         self.scan_button.grid(row=0, column=2, padx=4)
         self.connect_button = ctk.CTkButton(controls, text='Connect', width=110, command=self.toggle)
@@ -57,6 +58,11 @@ class SerialTab(ctk.CTkFrame):
         self.write('[INFO] EdgeTX DevEBox USB CDC: select its COM/ttyACM port, connect, send help or devboard with LF ending.\n'
                    '[INFO] Updated bootloader: hold RTN (PC5) at power-on/RESET for USB DFU; BOOT0 remains LOW.\n')
         self.poll()
+        self.scan()
+
+    def apply_config(self, config):
+        self.preferred_port = config.serial_port
+        self.baud.set(str(config.serial_baud))
         self.scan()
 
     def write(self, text):
@@ -145,7 +151,7 @@ class SerialTab(ctk.CTkFrame):
             self.scanning = False
             self.scan_button.configure(state='normal')
             if kind == 'ports':
-                old_device = next((p.device for p in self.ports if p.label == self.port_picker.get()), None)
+                old_device = self.preferred_port or next((p.device for p in self.ports if p.label == self.port_picker.get()), None)
                 self.ports = value
                 labels = [p.label for p in value] or ['No serial ports found']
                 self.port_picker.configure(values=labels)

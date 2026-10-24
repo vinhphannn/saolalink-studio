@@ -29,12 +29,13 @@ To install an application-menu entry and Desktop shortcut, and pin it to GNOME d
 .venv/bin/python saolalink-studio/install_desktop.py --pin
 ```
 
-The launcher uses this checkout's `.venv` directly and includes a custom RC radio
+The Linux launcher uses the Python environment running the installer and includes a custom RC radio
 icon. Omit `--pin` to install shortcuts without changing GNOME favorites. Re-run
 the installer after moving the project. `Ctrl+C` in a terminal stops the active
 operation and exits the GUI without a traceback.
 
-Linux needs a working display and Tk (`python3-tk` on Ubuntu).
+The GUI needs a working display and Tk (`python3-tk` on Ubuntu, `python3-tkinter` on Fedora).
+For native Windows setup, see [docs/SETUP.md](docs/SETUP.md).
 Build needs CMake >= 3.24, a native C/C++ compiler, Make (or the CMake default
 generator), and **Arm GNU Toolchain 14.2.rel1**. EdgeTX rejects other ARM GCC
 versions. The project-local toolchain is detected automatically at
@@ -132,8 +133,8 @@ The tool does not modify model files or build/flash the ELRS RF module firmware.
 
 Core does not import CustomTkinter. Add another transport by implementing its
 command planning in a core service and wiring one workspace callback.
-DFU command execution currently targets Linux/POSIX; other hosts need their
-USB drivers/toolchain paths verified.
+DFU commands use the executable selected in Setup on Linux and Windows;
+USB drivers and device permissions must be configured on each machine.
 
 ## Verify
 
@@ -143,3 +144,31 @@ USB drivers/toolchain paths verified.
 
 Tests cover operation failure/cancellation, isolation, full-image flags, artifact
 integrity and target mismatch, and multiple devices sharing one DFU VID/PID.
+
+## Linux / Windows machine setup
+
+Open **Setup** on first launch or from the header at any time. Browse to your
+EdgeTX checkout, output folder, Arm GNU toolchain, CMake, Ninja/Make, Git,
+build Python and dfu-util. Studio and EdgeTX do not need to be siblings.
+Optional LLVM, library prefixes, dependency cache and Visual Studio environment
+paths are also available. Use **Save & apply**, then **Check setup**.
+
+Settings live in your user profile, outside Git; each team member configures
+their own machine. Build, flash and serial diagnostics are separate. Serial
+scanning never opens a port or automatically connects. Failed setup checks
+include the tool and a repair hint; **Export checks** saves a shareable report.
+
+See [the setup guide](docs/SETUP.md) for Windows and Linux installation commands,
+USB/COM drivers, Python dependencies, path overrides and CLI setup.
+
+```sh
+python cli.py setup
+python cli.py doctor --scope build
+python cli.py doctor --scope flash --scan
+python cli.py doctor --scope serial --scan
+```
+
+The process runner uses POSIX process groups on Linux and process-tree
+termination on Windows. Automated tests run on both platforms through GitHub
+Actions; real USB flashing/serial access and firmware builds still need testing
+on the intended machine, tool versions and hardware.

@@ -1,0 +1,31 @@
+name: Portable Studio checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: saolalink-studio
+      - uses: actions/checkout@v4
+        with:
+          repository: vinhphannn/edgetx
+          ref: SAOLALINKV1
+          path: edgetx
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: git -C edgetx submodule update --init radio/src/thirdparty/STM32_USB_Device_Library
+      - run: python -m pip install -r saolalink-studio/requirements.txt
+      - run: python -m unittest discover -s saolalink-studio/tests -v
+      - if: runner.os == 'Linux'
+        run: xvfb-run -a python saolalink-studio/tests/gui_smoke.py
+      - if: runner.os == 'Windows'
+        run: python saolalink-studio/tests/gui_smoke.py

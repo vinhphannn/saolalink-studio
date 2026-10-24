@@ -9,6 +9,8 @@ import sys
 from datetime import datetime, timezone
 
 from core.runner import OperationRunner
+from core.diagnostics import require_build
+from core.config import executable_in
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -19,32 +21,33 @@ class FirmwareBuilder:
         self.runner = OperationRunner(config.builds / 'logs')
 
     def preflight(self):
-        if not (self.config.source / 'CMakeLists.txt').is_file():
-            raise ValueError(f'EdgeTX checkout not found: {self.config.source}')
-        if not shutil.which('cmake'):
-            raise ValueError('Install CMake >= 3.24')
-        cmake_version = subprocess.run(['cmake', '--version'], capture_output=True, text=True, check=True).stdout
-        match = re.search(r'cmake version (\d+)\.(\d+)', cmake_version)
-        if not match or tuple(map(int, match.groups())) < (3, 24):
-            raise ValueError('Install CMake >= 3.24 (--fresh is required)')
-        compiler = str(self.config.toolchain / 'arm-none-eabi-g++') if self.config.toolchain else 'arm-none-eabi-g++'
-        version = subprocess.run([compiler, '-dumpfullversion'], capture_output=True, text=True, check=True).stdout.strip()
-        if version != '14.2.1':
-            raise ValueError(f'EdgeTX requires Arm GNU 14.2.rel1 (14.2.1), found {version}. Set ARM_TOOLCHAIN_DIR to its bin folder.')
+        self.runner.env = self.config.environment()
+        require_build(self.config, self.runner.env)
 
     def configure_commands(self, profile, mode):
         directory = self.config.build_dir(profile, mode)
-        command = ['cmake', '--fresh', '-S', str(self.config.source), '-B', str(directory),
+        path = lambda value: str(value).replace('\\', '/')
+        command = [self.config.tool('cmake'), '--fresh', '-G', self.config.generator,
+                   '-S', path(self.config.source), '-B', path(directory),
                    f'-DPCB={profile.pcb}', f'-DPCBREV={profile.pcbrev}',
                    f'-DCMAKE_BUILD_TYPE={mode}', '-DDEFAULT_MODE=2', '-DTRANSLATIONS=EN',
                    '-DUSE_FW_LTO=ON', '-DBOOTLOADER=ON', '-DFIRMWARE_STRIP_BOOTLOADER=OFF', '-DFIRMWARE_FORMAT_UF2=OFF',
-                   f'-DPython3_EXECUTABLE={sys.executable}']
+                   f'-DPython3_EXECUTABLE={path(self.config.tool("python"))}']
+        env = self.runner.env or self.config.environment()
+        for variable, name in [('CMAKE_MAKE_PROGRAM', 'build-tool'), ('GIT_EXECUTABLE', 'git')]:
+            tool = self.config.tool(name)
+            resolved = shutil.which(tool, path=env['PATH']) or tool
+            command.append(f'-D{variable}={path(resolved)}')
         if self.config.toolchain:
-            command.append(f'-DARM_TOOLCHAIN_DIR={self.config.toolchain}')
+            command.append(f'-DARM_TOOLCHAIN_DIR={path(executable_in(self.config.toolchain, "arm-none-eabi-g++").parent)}')
+        for variable, value in [('FETCHCONTENT_BASE_DIR', self.config.dependency_cache),
+                                ('CMAKE_PREFIX_PATH', self.config.library_prefix)]:
+            if value:
+                command.append(f'-D{variable}={path(value)}')
         if profile.hse_hz is not None:
             command.append(f'-DSAOLALINK_HSE_HZ={profile.hse_hz}')
             command.append(f'-DSAOLALINK_DEVEBOX={"ON" if profile.key == "saolalink-devebox" else "OFF"}')
-        return [command, ['cmake', '--build', str(directory), '--target', 'arm-none-eabi-configure']]
+        return [command, [self.config.tool('cmake'), '--build', str(directory), '--target', 'arm-none-eabi-configure']]
 
     def build(self, profile, mode='Debug', kind='firmware', jobs=4):
         if kind not in ('firmware', 'bootloader'):
@@ -63,8 +66,8 @@ class FirmwareBuilder:
                 (directory / 'arm-none-eabi' / f'{related}.manifest.json').unlink(missing_ok=True)
         (directory / 'arm-none-eabi/radio/src' / f'{profile.flavour}.json.h').unlink(missing_ok=True)
         commands = self.configure_commands(profile, mode)
-        commands.append(['cmake', '--build', str(directory / 'arm-none-eabi'), '--target', 'hardware_defs', '--parallel', str(max(1, int(jobs)))])
-        commands.append(['cmake', '--build', str(directory), '--target', kind, '--parallel', str(max(1, int(jobs)))])
+        commands.append([self.config.tool('cmake'), '--build', str(directory / 'arm-none-eabi'), '--target', 'hardware_defs', '--parallel', str(max(1, int(jobs)))])
+        commands.append([self.config.tool('cmake'), '--build', str(directory), '--target', kind, '--parallel', str(max(1, int(jobs)))])
         return self.runner.start('build-' + kind, commands, self.config.source,
                                  lambda: self.record_artifact(profile, mode, kind))
 
@@ -93,12 +96,13 @@ class FirmwareBuilder:
         limit = profile.flash_size if kind == 'firmware' else profile.bootloader_size
         if not 8 <= binary.stat().st_size <= limit:
             raise ValueError(f'{kind} binary exceeds flash region or is empty')
-        git = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=self.config.source, capture_output=True, text=True, check=True)
-        changes = subprocess.run(['git', 'diff', '--binary', 'HEAD'], cwd=self.config.source, capture_output=True, check=True)
+        env = self.runner.env or self.config.environment()
+        git = subprocess.run([self.config.tool('git'), 'rev-parse', 'HEAD'], cwd=self.config.source, env=env, capture_output=True, text=True, encoding='utf-8', check=True)
+        changes = subprocess.run([self.config.tool('git'), 'diff', '--binary', 'HEAD'], cwd=self.config.source, env=env, capture_output=True, check=True)
         # Includes untracked target files too, so the manifest identifies their exact content.
-        untracked = subprocess.run(['git', 'ls-files', '--others', '--exclude-standard'], cwd=self.config.source, capture_output=True, text=True, check=True)
+        untracked = subprocess.run([self.config.tool('git'), 'ls-files', '-z', '--others', '--exclude-standard'], cwd=self.config.source, env=env, capture_output=True, text=True, encoding='utf-8', check=True)
         state = hashlib.sha256(changes.stdout)
-        for name in sorted(untracked.stdout.splitlines()):
+        for name in sorted(filter(None, untracked.stdout.split('\0'))):
             path = self.config.source / name
             if path.is_file():
                 state.update(name.encode()); state.update(path.read_bytes())
@@ -160,10 +164,13 @@ class FirmwareBuilder:
             if device.edgetx_bootloader:
                 raise ValueError('EdgeTX DFU protects the bootloader. Use Flash application, or ROM DFU for bootloader install.')
             address = profile.flash_address if profile.key == 'saolalink-devebox' else profile.flash_address + ':leave'
-        command = ['dfu-util', *device.selector_args(), '-a', '0', '-s', address, '-D', str(binary)]
-        return self.runner.start('flash-' + kind, [command], self.config.source)
+        self.runner.env = self.config.environment(build=False)
+        command = [self.config.tool('dfu-util'), *device.selector_args(), '-a', '0', '-s', address, '-D', str(binary)]
+        return self.runner.start('flash-' + kind, [command], binary.parent)
 
     def clean(self, profile, mode):
+        self.config.updated({})
         directory = self.config.build_dir(profile, mode)
+        self.runner.env = self.config.environment(build=False)
         return self.runner.start('clean', [[sys.executable, '-c',
-            'import pathlib,shutil,sys; p=pathlib.Path(sys.argv[1]); shutil.rmtree(p) if p.exists() else None', str(directory)]], self.config.source)
+            'import pathlib,shutil,sys; p=pathlib.Path(sys.argv[1]); shutil.rmtree(p) if p.exists() else None', str(directory)]], Path.home())

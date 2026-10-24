@@ -1,7 +1,8 @@
 """Exercise actual pyserial IO with a POSIX pseudo-terminal, no hardware needed."""
 import os
 from pathlib import Path
-import pty
+if os.name == 'posix':
+    import pty
 import queue
 import select
 import sys
@@ -24,6 +25,7 @@ def eventually(predicate, timeout=2):
     raise AssertionError('Timed out waiting for serial worker')
 
 
+@unittest.skipUnless(os.name == 'posix', 'requires POSIX pseudo-terminals')
 class SerialTests(unittest.TestCase):
     def setUp(self):
         self.master, self.slave = pty.openpty()

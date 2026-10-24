@@ -4,13 +4,14 @@ import ast
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 APP_ID = 'saolalink-studio.desktop'
 STUDIO = Path(__file__).resolve().parent
 PROJECT = STUDIO.parent
 
 def desktop_entry():
-    python = PROJECT / '.venv/bin/python'
+    python = Path(sys.executable)
     if not python.is_file():
         raise RuntimeError(f'Python environment not found: {python}')
     return f'''[Desktop Entry]
@@ -31,6 +32,8 @@ StartupWMClass=Saolalinkstudio
 '''
 
 def run():
+    if sys.platform == 'win32':
+        raise SystemExit('This GNOME shortcut installer is Linux-only. On Windows run main.py with your Studio Python environment; see docs/SETUP.md.')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pin', action='store_true', help='Also add to GNOME favorites, keeping existing favorites')
     parser.add_argument('--prepare', action='store_true', help='Only write the reviewable desktop file inside the project')
