@@ -32,6 +32,7 @@ class SetupTab(ctk.CTkFrame):
         self.app = app
         self.entries = {}
         self.buttons = []
+        self._busy = None
         ctk.CTkLabel(self, text='Machine setup', font=ctk.CTkFont(size=24, weight='bold')).pack(anchor='w', pady=(8, 0))
         self.notice = ctk.CTkLabel(self, text='Select paths for this computer. Save & apply, then check setup.', anchor='w')
         self.notice.pack(fill='x')
@@ -123,6 +124,9 @@ class SetupTab(ctk.CTkFrame):
         self.notice.configure(text=f'Check complete: {errors} error(s). Checks use the form values; Save & apply activates changes.')
 
     def set_busy(self, busy):
+        if busy == self._busy:
+            return
+        self._busy = busy
         state = 'disabled' if busy else 'normal'
         for button in self.buttons:
             button.configure(state=state)

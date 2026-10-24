@@ -32,6 +32,8 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
             for _ in range(20):
                 app.update()
                 time.sleep(0.025)
+            assert app.winfo_width() >= 1020 and app.winfo_height() >= 700
+            assert app.setup_tab.entries['source'].winfo_width() > 200
             ImageGrab.grab().save(os.environ['GUI_SMOKE_SCREENSHOT'])
         app.setup_tab.guide()
         app.update()
