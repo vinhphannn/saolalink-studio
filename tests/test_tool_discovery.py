@@ -17,7 +17,7 @@ from core.diagnostics import Check
 class DiscoveryTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='Studio discovery có dấu ')
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.config = AppConfig(self.root / 'source', self.root / 'builds', generator='Unix Makefiles')
 
     def tearDown(self):
@@ -35,8 +35,8 @@ class DiscoveryTests(unittest.TestCase):
         config = replace(self.config, cmake=custom, git='not-installed')
         with patch('core.tool_discovery.search_path', return_value=str(self.root / 'vendor')):
             result = discover_tools(config, only={'git'})
-        self.assertEqual(result.git, standard)
-        self.assertEqual(result.cmake, custom)
+        self.assertEqual(Path(result.git), Path(standard))
+        self.assertEqual(Path(result.cmake), Path(custom))
         self.assertEqual(result.generator, 'Unix Makefiles')
         self.assertEqual(result.source, self.config.source)
 
@@ -46,7 +46,7 @@ class DiscoveryTests(unittest.TestCase):
         right = self.executable(self.root / ('arm-gnu-toolchain-14.2.rel1/bin/arm-none-eabi-g++' + suffix))
         config = replace(self.config, toolchain=Path(wrong).parent)
         with patch('core.tool_discovery.search_path', return_value=str(Path(right).parent)), \
-                patch('core.tool_discovery.arm_version', side_effect=lambda path: path == right):
+                patch('core.tool_discovery.arm_version', side_effect=lambda path: Path(path) == Path(right)):
             result = discover_tools(config, only={'toolchain'})
         self.assertEqual(result.toolchain, Path(right).parent)
 
