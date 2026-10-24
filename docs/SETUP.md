@@ -8,7 +8,7 @@ Machine settings are stored per user, outside both Git repositories:
 - Optional override: `SAOLALINK_CONFIG` points to a different settings JSON file.
 
 The app opens Setup on first run, an unreadable settings file, or a missing EdgeTX checkout.
-You can always open Setup from the header or its tab. A broken build setup does not prevent
+You can always open the Setup tab. A broken build setup does not prevent
 using the serial monitor. Settings are not shared through Git; install the tools for each OS.
 
 ## Install and start Studio
@@ -173,7 +173,7 @@ appear/disappear when switching between firmware and bootloader modes; rescan an
 ## Repair setup and command-line use
 
 Open Setup after moving a checkout, changing tools, or seeing a missing-tool error. Use Check setup
-and Export checks to collect readable diagnostics for another team member. No build is started by
+and Export setup checks (under advanced options) to collect diagnostics for another team member. No build is started by
 checking setup. Save & apply switches the displayed artifact and clears the old DFU selection.
 
 The GUI and CLI share settings. Explicit CLI flags take precedence over the saved settings.

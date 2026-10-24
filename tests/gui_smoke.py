@@ -20,7 +20,8 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
     try:
         app.update()
         assert app.tabs.get() == 'Setup', 'First run must open Setup'
-        assert not app.log.winfo_manager(), 'Setup should have room for its form'
+        assert not app.log_section.winfo_manager(), 'Setup should have room for its form'
+        assert not app.hardware_bar.winfo_manager(), 'Hardware belongs to Build / Flash only'
         assert not app.setup_tab.entries['cmake'].winfo_manager(), 'Tool paths should be hidden in basic setup'
         app.setup_tab.advanced.select(); app.setup_tab.toggle_advanced()
         app.update()
@@ -31,7 +32,7 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
         assert AppConfig.load().builds == config.builds
         assert app.builder.config == config
         assert app.serial_tab.preferred_port == 'COM12'
-        assert 'Refresh' in app.flash_tab.devices.get()
+        assert 'Scan' in app.flash_tab.devices.get()
         app.setup_tab.fill(config)
         with patch('ui.setup_tab.discover_tools', return_value=config), \
                 patch('ui.setup_tab.diagnose', return_value=[]):

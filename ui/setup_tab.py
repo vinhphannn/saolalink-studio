@@ -55,11 +55,11 @@ class SetupTab(ctk.CTkFrame):
         for row, (name, label, kind) in enumerate(FIELDS):
             caption = ctk.CTkLabel(form, text=label, anchor='w')
             caption.grid(row=row, column=0, padx=8, pady=4, sticky='w')
-            entry = ctk.CTkEntry(form)
+            entry = ctk.CTkEntry(form, height=34)
             entry.grid(row=row, column=1, padx=4, pady=4, sticky='ew')
             self.entries[name] = entry
             if kind:
-                button = ctk.CTkButton(form, text='Browse…', width=85, command=lambda n=name, k=kind: self.browse(n, k))
+                button = ctk.CTkButton(form, text='Browse…', width=95, height=34, command=lambda n=name, k=kind: self.browse(n, k))
                 button.grid(row=row, column=2, padx=8)
                 self.buttons.append(button)
             if name not in ('source', 'builds'):
@@ -74,6 +74,9 @@ class SetupTab(ctk.CTkFrame):
         self.baud = ctk.CTkOptionMenu(form, values=['9600', '19200', '38400', '57600', '115200', '230400', '460800', '921600'])
         self.baud.grid(row=row + 1, column=1, padx=4, pady=4, sticky='w')
         self.advanced_widgets += [generator_caption, self.generator, baud_caption, self.baud]
+        export_button = ctk.CTkButton(form, text='Export setup checks…', height=36, command=self.export)
+        export_button.grid(row=row + 2, column=1, padx=4, pady=8, sticky='w')
+        self.advanced_widgets.append(export_button); self.buttons.append(export_button)
         self.basic_help = ctk.CTkLabel(form, text=(
             'Start with Find tools. Installed tools are filled automatically.\n\n'
             'Then Install missing to review downloads and complete the OS installer dialogs.\n\n'
@@ -87,8 +90,8 @@ class SetupTab(ctk.CTkFrame):
         bar.pack(fill='x', pady=4)
         for label, callback in [('Find tools', self.detect), ('Install missing…', self.repair),
                                 ('Check setup', self.check), ('Save & apply', self.save),
-                                ('Setup guide', self.guide), ('Export checks', self.export)]:
-            button = ctk.CTkButton(bar, text=label, width=125, command=callback)
+                                ('Setup guide', self.guide)]:
+            button = ctk.CTkButton(bar, text=label, width=125, height=38, command=callback)
             button.pack(side='left', padx=(0, 6))
             self.buttons.append(button)
         self.results = ctk.CTkTextbox(self, height=130, font=('Courier', 12))

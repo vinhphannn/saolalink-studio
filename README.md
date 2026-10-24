@@ -124,7 +124,7 @@ Existing environment overrides remain supported: `EDGETX_DIR`, `SAOLALINK_BUILD_
 
 ## Firmware defaults
 
-The GUI defaults to **SaolaLink DevEBox 8MHz (EdgeTX USB)** for the current bare
+The GUI defaults to **DevEBox • 8 MHz** for the current bare
 development board. CLI defaults to **SaolaLink V1** (12 MHz).
 Both use `PCB=X7`, `PCBREV=SAOLALINK_V1` with separate build directories.
 Pocket remains selectable as a reference. Debug and Release outputs are isolated:
@@ -135,14 +135,24 @@ inline functions and affect single-stepping.
 
 ## Workspaces
 
-- **Build**: check tools, configure, build firmware/bootloader, clean, stop; shows the verified firmware artifact.
-- **Flash**: discover STM32 ROM DFU devices, select exact USB path, flash the selected profile's firmware or bootloader.
-  DevEBox uses **Flash bootloader** once in ROM DFU, then **Flash application
-  (EdgeTX USB)** at 0x08008000. Install the updated bootloader once via ROM
-  DFU to enable RTN entry (updating the application alone cannot change it).
-  BOOT0 stays LOW for application updates; hold **RTN (PC5)** at power-on or
-  RESET to enter the EdgeTX loader, then release RTN. The loader waits until
-  reset; press RESET without RTN after uploading. Older loaders use PA0.
+Four tabs separate the daily tasks. Large primary buttons stay visible; occasional
+actions are one level under a named details/options section. The shared **Hardware
+profile** selector applies to Build and Flash USB. It selects the physical board /
+crystal, not a Git branch. It is hidden in Serial monitor and Setup.
+
+- **Build**: **Build firmware**, **Build bootloader**, and **Clean build files**.
+  Configuration/environment checks run automatically when building. The two build
+  cards show whether their artifacts are ready. Paths, timestamps and hashes are
+  under **Build files & verification details**. **Build options & developer tools**
+  contains Debug/Release, Configure only, Compare with Pocket, the source path and
+  a detailed workflow guide. The active mode is still visible beside the hardware.
+- **Flash USB**: **Scan USB devices**, an explicit device selector, and two primary
+  actions: **Flash firmware via USB** for everyday DevEBox application updates,
+  and **Flash bootloader via DFU** for a first install/loader update through ROM DFU.
+  Each card explains the board's entry sequence and why its button is unavailable
+  when a build/device/mode is missing. Every real upload still requires confirmation
+  and core artifact/device validation. Full-image ROM recovery is under
+  **Recovery & USB details**. V1/Pocket firmware uploads currently use that ROM path.
 - **Serial monitor**: scan COM/tty ports with device description and USB identity,
   select baud (115200 by default), connect/disconnect, receive logs and send UTF-8
   commands with None/LF/CRLF ending. Clear, save the visible log and toggle
@@ -150,13 +160,24 @@ inline functions and affect single-stepping.
   retains at most about 200,000 characters; export before old text is trimmed.
   Scanning never opens a device. DTR/RTS are requested low without an intentional
   reset pulse; driver/hardware behaviour during open can still vary.
-- **Compare Pocket**: hardware diff with identity separated, target build settings,
-  Pocket drift, local HAL overrides, integration diff against a fixed upstream
-  commit; export a report. Building both profiles also exposes effective HAL macro differences.
+- **Setup**: the single place for project folders, installed tools and machine
+  diagnostics. Basic setup stays short; individual tool paths and exporting checks
+  are under **Show tool paths and advanced options**. No duplicate Setup header button.
 
-The operation log is available in the work tabs, with one file per operation in
-the configured build folder's `logs/`. Setup uses its own check/installation output area.
-The runner serializes operations and stops child process groups.
+**Operation log** is collapsed by default on Build/Flash USB and expands on errors.
+The status/progress indicator shows active work. **Stop current task** appears only
+while a cancellable runner operation is active. Actions and hardware/mode selection
+are disabled while a task is in progress. Serial monitor and Setup have their own
+output areas. Runner logs are also saved in the configured build folder's `logs/`.
+
+See [the step-by-step Build / USB / Serial workflow](docs/WORKFLOW.md) for the first
+bootloader install, daily firmware edits, BOOT0/RTN sequences, Clean and recovery.
+Compare with Pocket opens a secondary developer-report window; it is no longer a
+main navigation tab. Its hardware/source/HAL comparisons and exports remain available.
+
+Use Studio's **main** Git branch for the current app. **feat/portable-setup** is the
+older setup-development branch. The firmware repository uses **SAOLALINKV1**;
+changing the hardware dropdown does not switch that checkout's Git branch.
 
 Serial discovery is intentionally separate from DFU discovery. USB-TTL bridges
 (CH340, CP210x, FTDI, etc.) and native USB CDC ports are listed without filtering
@@ -226,7 +247,7 @@ integrity and target mismatch, and multiple devices sharing one DFU VID/PID.
 
 ## Linux / Windows machine setup
 
-Open **Setup** on first launch or from the header at any time. Browse to your
+Open the **Setup** tab on first launch or at any time. Browse to your
 EdgeTX checkout, output folder, Arm GNU toolchain, CMake, Ninja/Make, Git,
 build Python and dfu-util. Studio and EdgeTX do not need to be siblings.
 Optional LLVM, library prefixes, dependency cache and Visual Studio environment
@@ -242,7 +263,7 @@ are listed explicitly. Checks and builds never start installers automatically.
 Settings live in your user profile, outside Git; each team member configures
 their own machine. Build, flash and serial diagnostics are separate. Serial
 scanning never opens a port or automatically connects. Failed setup checks
-include the tool and a repair hint; **Export checks** saves a shareable report.
+include the tool and a repair hint; **Export setup checks…** under advanced options saves a shareable report.
 
 See [the setup guide](docs/SETUP.md) for supported automatic repairs, manual installation,
 USB/COM drivers, Python dependencies, path overrides and CLI setup.

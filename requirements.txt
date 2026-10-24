@@ -1,2 +1,2 @@
-customtkinter>=5.2,<7
+customtkinter>=6,<7
 pyserial>=3.5,<4
