@@ -24,7 +24,7 @@ from core.serial_service import SerialMonitor, discover_ports
 class SetupTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='Studio setup ')
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.config = AppConfig(self.root / 'Firmware riêng', self.root / 'Build output')
         self.env = {key: value for key, value in os.environ.items() if key not in
                     ('EDGETX_DIR', 'SAOLALINK_BUILD_DIR', 'ARM_TOOLCHAIN_DIR', 'SAOLALINK_CONFIG')}
@@ -78,6 +78,19 @@ class SetupTests(unittest.TestCase):
         with patch('core.config.WINDOWS', True):
             self.assertEqual(executable_in(arm.parent, 'arm-none-eabi-g++'), arm / 'arm-none-eabi-g++.exe')
 
+    def test_visual_studio_environment_preserves_unicode_and_path(self):
+        script = self.root / 'Visual Studio tools/VsDevCmd.bat'
+        script.parent.mkdir()
+        script.touch()
+        config = replace(self.config, vsdevcmd=str(script))
+        result = SimpleNamespace(stdout='Path=C:/Native tools\nINCLUDE=C:/Thư viện/include\n')
+        with patch('core.config.WINDOWS', True), patch('core.config.subprocess.run', return_value=result) as run:
+            env = config.environment()
+        self.assertEqual(env['INCLUDE'], 'C:/Thư viện/include')
+        self.assertIn('C:/Native tools', env['PATH'])
+        self.assertEqual(run.call_args.kwargs['encoding'], 'utf-16-le')
+        self.assertIn('/u', run.call_args.args[0])
+
     def test_commands_use_configured_tools_and_paths_as_single_arguments(self):
         selected = replace(self.config, cmake=str(self.root / 'CMake tools/cmake'),
                            build_python=str(self.root / 'Build Python/python'),
@@ -120,6 +133,7 @@ class SetupTests(unittest.TestCase):
                    '--serial-port', 'COM12', '--save']
         result = subprocess.run(command, env=self.env, text=True, encoding='utf-8', capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Firmware riêng', result.stdout)
         with patch.dict(os.environ, self.env, clear=True):
             saved = AppConfig.load(path)
         self.assertEqual(saved.source, self.config.source)

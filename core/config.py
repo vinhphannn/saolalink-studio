@@ -203,8 +203,8 @@ class AppConfig:
             # This is a user-selected Visual Studio script; prohibit cmd metacharacters.
             if not path.is_file() or path.suffix.lower() != '.bat' or any(c in str(path) for c in '%&^|<>"!\r\n'):
                 raise ValueError('Select a valid VsDevCmd.bat path without shell metacharacters in Setup')
-            result = subprocess.run(['cmd.exe', '/d', '/c', f'call "{path}" -arch=x64 -host_arch=x64 >nul && set'],
-                                    capture_output=True, text=True, errors='replace', timeout=30, check=True)
+            result = subprocess.run(['cmd.exe', '/d', '/u', '/c', f'call "{path}" -arch=x64 -host_arch=x64 >nul && set'],
+                                    capture_output=True, text=True, encoding='utf-16-le', errors='replace', timeout=30, check=True)
             for line in result.stdout.splitlines():
                 key, sep, value = line.partition('=')
                 if sep and key:

@@ -13,6 +13,8 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
         os.environ.pop(name, None)
     from core.config import AppConfig
     from ui.main_window import AppWindow
+    import customtkinter as ctk
+    ctk.set_appearance_mode('Dark')
     app = AppWindow()
     try:
         app.update()
@@ -41,6 +43,10 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
             time.sleep(0.01)
         assert not app._checking, 'Setup diagnostics did not finish'
         assert '[OK]' in app.setup_tab.results.get('1.0', 'end') or '[ERROR]' in app.setup_tab.results.get('1.0', 'end')
+        if os.environ.get('GUI_SMOKE_SCREENSHOT'):
+            from PIL import ImageGrab
+            app.update()
+            ImageGrab.grab().save(os.environ['GUI_SMOKE_SCREENSHOT'])
         print('GUI first-run, apply, guide, busy guard and diagnostics: OK')
     finally:
         app._checking = False

@@ -12,6 +12,9 @@ from core.diagnostics import diagnose
 
 
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8', errors='replace')
     parser = argparse.ArgumentParser(description='SaolaLink firmware tools')
     parser.add_argument('action', choices=['setup', 'configure', 'build', 'clean', 'devices', 'flash', 'compare', 'doctor'])
     parser.add_argument('--profile', choices=PROFILES, default='saolalink-v1')

@@ -27,5 +27,12 @@ jobs:
       - run: python -m unittest discover -s saolalink-studio/tests -v
       - if: runner.os == 'Linux'
         run: xvfb-run -a python saolalink-studio/tests/gui_smoke.py
+        env:
+          GUI_SMOKE_SCREENSHOT: setup-linux.png
       - if: runner.os == 'Windows'
         run: python saolalink-studio/tests/gui_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: setup-linux
+          path: setup-linux.png
