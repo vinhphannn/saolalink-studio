@@ -37,6 +37,7 @@ with tempfile.TemporaryDirectory(prefix='Studio workflows ') as temporary:
         bottom = widget.winfo_rooty() + widget.winfo_height()
         tab = app.tabs.tab(name)
         assert bottom <= tab.winfo_rooty() + tab.winfo_height(), widget.cget('text') + ' requires scrolling'
+        assert widget.winfo_rootx() + widget.winfo_width() <= tab.winfo_rootx() + tab.winfo_width(), widget.cget('text') + ' extends past the tab'
 
     try:
         settle()
@@ -70,7 +71,8 @@ with tempfile.TemporaryDirectory(prefix='Studio workflows ') as temporary:
         app.geometry('1180x820'); settle()
 
         rom = DfuDevice('0483:df11', 'test-rom', 'TEST-ONLY', '@Internal Flash /0x08000000/')
-        usb = DfuDevice('0483:df11', 'test-app', 'TEST-ONLY', '@SaolaLink App /0x08008000/')
+        usb = DfuDevice('0483:df11', 'test-app', 'TEST-ONLY-0123456789ABCDEF0123456789',
+                        '@SaolaLink App /0x08008000/02*016Kg,01*064Kg,03*128Kg')
 
         def artifact(profile, mode, kind):
             return Path(temporary) / (kind + '.bin'), {
@@ -93,6 +95,10 @@ with tempfile.TemporaryDirectory(prefix='Studio workflows ') as temporary:
             assert app.flash_tab.full_image.cget('state') == 'disabled'
             with patch.object(app, 'flash') as upload:
                 app.flash_tab.firmware.button.invoke(); upload.assert_called_once_with('application')
+            app.geometry('1020x700'); settle()
+            visible_in_tab(app.flash_tab.scan_button, 'Flash USB')
+            visible_in_tab(app.flash_tab.firmware.button, 'Flash USB')
+            app.geometry('1180x820'); settle()
             capture('flash-usb-ready-test-data')
             with patch('ui.main_window.messagebox.askyesno', return_value=False), patch.object(app, 'background') as background:
                 app.flash('application'); background.assert_not_called()

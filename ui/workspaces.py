@@ -78,7 +78,8 @@ class FlashTab(ctk.CTkScrollableFrame):
                     anchor='w', justify='left', wraplength=880, text_color='gray65').pack(fill='x', pady=(0, 12))
         selector = ctk.CTkFrame(self); selector.pack(fill='x', pady=(0, 12)); selector.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(selector, text='USB DFU device', anchor='w').grid(row=0, column=0, padx=12, pady=(8, 0), sticky='ew')
-        self.devices = ctk.CTkOptionMenu(selector, values=['Scan to discover USB devices'], width=380, height=38, command=lambda _: self.refresh_state())
+        self.devices = ctk.CTkOptionMenu(selector, values=['Scan to discover USB devices'], width=380, height=38,
+            dynamic_resizing=False, command=lambda _: self.refresh_state())
         self.devices.grid(row=1, column=0, padx=12, pady=(4, 8), sticky='ew')
         self.scan_button = ctk.CTkButton(selector, text='Scan USB devices', width=160, height=BUTTON_HEIGHT, command=app.refresh_devices)
         self.scan_button.grid(row=1, column=1, padx=(0, 12), pady=(4, 8))
