@@ -3,6 +3,7 @@ from dataclasses import asdict, dataclass, fields, replace
 from pathlib import Path
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -89,15 +90,27 @@ class AppConfig:
         arm = shutil.which('arm-none-eabi-g++')
         toolchain = bundled if bundled.is_dir() else (Path(arm).parent if arm else None)
         generator = 'Ninja' if WINDOWS or shutil.which('ninja') else 'Unix Makefiles'
+        builds = PROJECT_DIR / 'build' if (PROJECT_DIR / 'build').is_dir() else data_dir() / 'builds'
+        # Preserve the generator used by an existing workspace when upgrading Studio.
+        for cache in sorted(builds.glob('*/*/CMakeCache.txt')):
+            try:
+                text = cache.read_text(encoding='utf-8', errors='replace')
+            except OSError:
+                continue
+            match = re.search(r'^CMAKE_GENERATOR:[^=]+=(.+)$', text, re.M)
+            if match and match[1] in (('Ninja', 'MinGW Makefiles', 'NMake Makefiles') if WINDOWS else ('Ninja', 'Unix Makefiles')):
+                generator = match[1]
+                break
         def tool(name):
             return shutil.which(name) or name
         llvm = shutil.which('clang')
         return cls(
             PROJECT_DIR / 'edgetx',
-            PROJECT_DIR / 'build' if (PROJECT_DIR / 'build').is_dir() else data_dir() / 'builds',
+            builds,
             toolchain,
             cmake=tool('cmake'), git=tool('git'), dfu_util=tool('dfu-util'),
-            build_tool=tool('ninja' if generator == 'Ninja' else 'make'), generator=generator,
+            build_tool=tool({'Ninja': 'ninja', 'Unix Makefiles': 'make', 'MinGW Makefiles': 'mingw32-make',
+                             'NMake Makefiles': 'nmake'}[generator]), generator=generator,
             native_cc=os.environ.get('CC', ''), native_cxx=os.environ.get('CXX', ''),
             llvm=str(Path(llvm).parent) if llvm else '',
         )
@@ -240,3 +253,21 @@ class AppConfig:
         if mode not in ('Debug', 'Release'):
             raise ValueError('Build type must be Debug or Release')
         return self.builds / profile.key / mode.lower()
+
+    def cache_issue(self, profile, mode):
+        directory = self.build_dir(profile, mode)
+        for cache in (directory / 'CMakeCache.txt', directory / 'arm-none-eabi/CMakeCache.txt'):
+            if not cache.is_file():
+                continue
+            text = cache.read_text(encoding='utf-8', errors='replace')
+            generator = re.search(r'^CMAKE_GENERATOR:[^=]+=(.+)$', text, re.M)
+            source = re.search(r'^CMAKE_HOME_DIRECTORY:[^=]+=(.+)$', text, re.M)
+            reason = ''
+            if generator and generator[1] != self.generator:
+                reason = f'cached generator {generator[1]} differs from {self.generator}'
+            elif source and Path(source[1]).resolve() != self.source.resolve():
+                reason = f'cache belongs to another EdgeTX path: {source[1]}'
+            if reason:
+                return (f'{profile.name} / {mode}: {reason}. Use Clean for this board/mode, '
+                        f'or select a new build output folder in Setup. Cache: {cache}')
+        return None

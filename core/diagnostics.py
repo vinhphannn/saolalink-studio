@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 
-from core.config import WINDOWS
+from core.config import WINDOWS, PROFILES
 
 
 @dataclass(frozen=True)
@@ -131,6 +131,10 @@ def diagnose(config, groups=('build', 'flash', 'serial'), scan=False, env=None):
             add('build', 'Library prefix', 'ok' if Path(prefix).expanduser().is_dir() else 'error', prefix)
         if config.llvm:
             add('build', 'LLVM folder', 'ok' if Path(config.llvm).expanduser().is_dir() else 'error', config.llvm)
+        cache_issues = [issue for profile in PROFILES.values() for mode in ('Debug', 'Release')
+                        if (issue := config.cache_issue(profile, mode))]
+        if cache_issues:
+            add('build', 'Existing build caches', 'warn', '\n'.join(cache_issues))
         if WINDOWS and len(str(config.builds)) > 90:
             add('build', 'Windows paths', 'warn', 'A short build path such as C:/sl-build reduces Windows path-length issues')
 

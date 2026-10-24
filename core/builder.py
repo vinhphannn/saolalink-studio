@@ -25,6 +25,9 @@ class FirmwareBuilder:
         require_build(self.config, self.runner.env)
 
     def configure_commands(self, profile, mode):
+        issue = self.config.cache_issue(profile, mode)
+        if issue:
+            raise ValueError(issue)
         directory = self.config.build_dir(profile, mode)
         path = lambda value: str(value).replace('\\', '/')
         command = [self.config.tool('cmake'), '--fresh', '-G', self.config.generator,

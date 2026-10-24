@@ -137,3 +137,8 @@ Use quoted native paths on Windows. Tools are launched as argument lists, withou
 spaces in checkout/tool paths do not require embedding quote characters into Setup fields.
 An invalid JSON settings file can be repaired through Setup or `cli.py setup ... --save`.
 Review a failed check before building; drivers and all real-device behavior still require hardware testing.
+
+When upgrading an existing workspace, auto-detection preserves its previous CMake generator.
+If you change generators or move EdgeTX while reusing output, Studio reports incompatible caches
+before configuring. Choose the affected board/mode and use Build → Clean, or select a new output
+folder in Setup. Checking setup never deletes previous firmware artifacts.

@@ -13,7 +13,7 @@ import unittest
 from unittest.mock import patch, Mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from core.config import AppConfig, executable_in, settings_path
+from core.config import AppConfig, PROFILES, executable_in, settings_path
 from core.builder import FirmwareBuilder
 from core.device_service import DeviceService
 from core.diagnostics import diagnose
@@ -103,6 +103,23 @@ class SetupTests(unittest.TestCase):
         self.assertIn('-DPython3_EXECUTABLE=' + selected.build_python.replace('\\', '/'), commands[0])
         self.assertIn('-DFETCHCONTENT_BASE_DIR=' + selected.dependency_cache.replace('\\', '/'), commands[0])
         self.assertIn('-DCMAKE_PREFIX_PATH=C:/Lib One;D:/Lib Two', commands[0])
+
+    def test_stale_build_cache_reports_repair_without_removing_artifacts(self):
+        profile = PROFILES['saolalink-v1']
+        output = self.config.build_dir(profile, 'Debug')
+        child = output / 'arm-none-eabi'
+        child.mkdir(parents=True)
+        artifact = child / 'firmware.bin'
+        artifact.write_bytes(b'preserve previous build')
+        cache = child / 'CMakeCache.txt'
+        cache.write_text('CMAKE_GENERATOR:INTERNAL=Unix Makefiles\n', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'Use Clean'):
+            FirmwareBuilder(self.config).configure_commands(profile, 'Debug')
+        self.assertEqual(artifact.read_bytes(), b'preserve previous build')
+        cache.write_text('CMAKE_GENERATOR:INTERNAL=Ninja\nCMAKE_HOME_DIRECTORY:INTERNAL=/other/checkout\n', encoding='utf-8')
+        self.assertIn('another EdgeTX path', self.config.cache_issue(profile, 'Debug'))
+        cache.write_text(f'CMAKE_GENERATOR:INTERNAL=Ninja\nCMAKE_HOME_DIRECTORY:INTERNAL={self.config.source.as_posix()}\n', encoding='utf-8')
+        self.assertIsNone(self.config.cache_issue(profile, 'Debug'))
 
     def test_dfu_uses_configured_executable_without_build_tools(self):
         config = replace(self.config, cmake='', build_tool='', dfu_util=str(self.root / 'USB tools/dfu-util.exe'), vsdevcmd='not-installed.bat')
