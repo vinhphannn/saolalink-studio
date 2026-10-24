@@ -26,6 +26,10 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
         assert app.builder.config == config
         assert app.serial_tab.preferred_port == 'COM12'
         assert 'Refresh' in app.flash_tab.devices.get()
+        if os.environ.get('GUI_SMOKE_SCREENSHOT'):
+            from PIL import ImageGrab
+            app.update()
+            ImageGrab.grab().save(os.environ['GUI_SMOKE_SCREENSHOT'])
         app.setup_tab.guide()
         app.update()
         for child in app.winfo_children():
@@ -46,10 +50,6 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
             time.sleep(0.01)
         assert not app._checking, 'Setup diagnostics did not finish'
         assert '[OK]' in app.setup_tab.results.get('1.0', 'end') or '[ERROR]' in app.setup_tab.results.get('1.0', 'end')
-        if os.environ.get('GUI_SMOKE_SCREENSHOT'):
-            from PIL import ImageGrab
-            app.update()
-            ImageGrab.grab().save(os.environ['GUI_SMOKE_SCREENSHOT'])
         print('GUI first-run, apply, guide, busy guard and diagnostics: OK')
     finally:
         app._checking = False
