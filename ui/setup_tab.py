@@ -152,7 +152,7 @@ class SetupTab(ctk.CTkFrame):
         ctk.CTkButton(bar, text='Close', command=window.destroy).pack(side='right', padx=6)
         if plan.steps:
             ctk.CTkButton(bar, text='Install & recheck', command=lambda: self.start_repair(plan, window)).pack(side='right', padx=6)
-        ctk.CTkButton(bar, text='Setup guide', command=self.guide).pack(side='left')
+        ctk.CTkButton(bar, text='Setup guide', command=lambda: self.guide(window)).pack(side='left')
         # Delay the grab until mapping; works on Windows and X11.
         window.after(100, lambda: window.grab_set() if window.winfo_exists() else None)
 
@@ -189,7 +189,9 @@ class SetupTab(ctk.CTkFrame):
         for button in self.buttons:
             button.configure(state=state)
 
-    def guide(self):
+    def guide(self, review=None):
+        if review is not None:
+            review.destroy()
         window = ctk.CTkToplevel(self)
         window.title('SaolaLink Studio — Setup guide'); window.geometry('850x650')
         text = ctk.CTkTextbox(window, wrap='word')

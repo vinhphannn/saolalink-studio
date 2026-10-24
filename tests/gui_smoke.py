@@ -62,6 +62,14 @@ with tempfile.TemporaryDirectory(prefix='Studio GUI ') as temporary:
                 app.update(); time.sleep(0.01)
         assert app.setup_tab.repair_window.winfo_exists(), 'Installation must require a review'
         assert 'installer output reached Setup' not in app.setup_tab.results.get('1.0', 'end')
+        review = app.setup_tab.repair_window
+        app.setup_tab.guide(review)
+        app.update()
+        assert not review.winfo_exists(), 'Guide must release the review dialog grab'
+        for child in app.winfo_children():
+            if isinstance(child, ctk.CTkToplevel):
+                child.destroy()
+        app.setup_tab.show_repair_plan(plan)
         with patch('ui.setup_tab.diagnose', return_value=[Check('build', 'Demo dependency', 'ok', 'ready')]):
             app.setup_tab.start_repair(plan, app.setup_tab.repair_window)
             deadline = time.monotonic() + 10
