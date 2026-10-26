@@ -162,7 +162,9 @@ class FirmwareBuilder:
         if kind == 'application':
             if not device.edgetx_bootloader:
                 raise ValueError('Hold RTN (PC5) at power-on or RESET with BOOT0=0; select the EdgeTX @SaolaLink App DFU device (requires updated bootloader)')
-            address = '0x08008000'
+            # Finish DFU manifestation so the loader resets into the app.
+            # Without :leave it keeps waiting with the power latch asserted.
+            address = '0x08008000:leave'
         else:
             if device.edgetx_bootloader:
                 raise ValueError('EdgeTX DFU protects the bootloader. Use Flash application, or ROM DFU for bootloader install.')

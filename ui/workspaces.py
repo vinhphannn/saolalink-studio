@@ -88,7 +88,7 @@ class FlashTab(ctk.CTkScrollableFrame):
         cards = ctk.CTkFrame(self, fg_color='transparent'); cards.pack(fill='x')
         cards.grid_columnconfigure((0, 1), weight=1, uniform='flash')
         self.firmware = ActionCard(cards, 'Everyday firmware update',
-            'DevEBox: BOOT0=0. Hold RTN (PC5) while powering on or resetting, then release. Scan and select the EdgeTX USB loader. This preserves the bootloader.',
+            'DevEBox: BOOT0=0. Hold RTN (PC5) while powering on or resetting, then release. Scan and select the EdgeTX USB loader. After upload, the device automatically resets to start firmware. This preserves the bootloader.',
             'Flash firmware via USB', lambda: app.flash('application'))
         self.firmware.grid(row=0, column=0, sticky='nsew', padx=(0, 6))
         self.bootloader = ActionCard(cards, 'Bootloader install / update',

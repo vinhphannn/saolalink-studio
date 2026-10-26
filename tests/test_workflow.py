@@ -124,7 +124,7 @@ class WorkflowTests(unittest.TestCase):
         with patch.object(self.builder.runner, 'start', return_value=True) as start:
             self.builder.flash(self.profile, 'Debug', 'application', device)
             command = start.call_args.args[1][0]
-            self.assertEqual(command[command.index('-s') + 1], '0x08008000')
+            self.assertEqual(command[command.index('-s') + 1], '0x08008000:leave')
             self.assertEqual(command[-1], str(app))
         with self.assertRaisesRegex(ValueError, 'Hold RTN'):
             self.builder.flash(self.profile, 'Debug', 'application',
